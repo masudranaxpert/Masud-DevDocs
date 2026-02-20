@@ -1,0 +1,119 @@
+---
+title: SQL Window-এর জাদু
+description: ROW_NUMBER, PARTITION BY, আর OVER() — window function নিয়ে যা যা শিখলাম
+---
+
+## Window Function মানে কী?
+
+কল্পনা করো তুমি একটা বড় table-এর দিকে তাকিয়ে আছো। এখন তুমি একটা **জানালা (window)** দিয়ে শুধু কিছু নির্দিষ্ট rows দেখছো।
+
+প্রতিটা row-এর জন্য SQL একটা **আলাদা window** খোলে এবং সেই window-এর ভেতরের rows দিয়ে calculation করে — কিন্তু মূল table-এর rows কমে না।
+
+এজন্যই এদের নাম **Window Function।**
+
+---
+
+## OVER() — দরজা
+
+`OVER()` হলো window function-এর **দরজা।** এই দরজা দিয়ে না ঢুকলে SQL বুঝবেই না কীভাবে কাজ করবে।
+
+```sql
+-- ❌ ভুল — error দেবে
+ROW_NUMBER()
+
+-- ✅ সঠিক
+ROW_NUMBER() OVER (PARTITION BY job_title_short ORDER BY job_location)
+```
+
+`OVER()` এর ভেতরে দুইটা জিনিস লেখা যায়:
+
+```sql
+OVER (
+    PARTITION BY ...   -- গ্রুপ করো (optional)
+    ORDER BY ...       -- সাজাও (optional)
+)
+```
+
+দুইটাই optional। শুধু `OVER()` লিখলেও চলে — তখন পুরো table-কে একটাই window ধরে।
+
+---
+
+## PARTITION BY — গ্রুপ করো
+
+`PARTITION BY` মানে হলো — নির্দিষ্ট column অনুযায়ী আলাদা আলাদা গ্রুপ বানাও, এবং **প্রতিটা গ্রুপে নতুন করে calculation শুরু করো।**
+
+```sql
+SELECT
+    job_location,
+    job_title_short,
+    ROW_NUMBER() OVER (PARTITION BY job_title_short ORDER BY job_location) AS rn
+FROM job_postings_fact
+```
+
+**Output:**
+
+| job_location | job_title_short | rn |
+|---|---|---|
+| Ankara | Data Analyst | 1 |
+| Berlin | Data Analyst | 2 |
+| Cairo | Data Analyst | 3 |
+| Austin | Data Engineer | 1 |
+| Boston | Data Engineer | 2 |
+
+প্রতিটা `job_title_short` এ আলাদাভাবে **1 থেকে শুরু** হয়েছে।
+
+---
+
+## GROUP BY vs PARTITION BY
+
+এই দুইটা এক জিনিস না — এটা অনেক গুরুত্বপূর্ণ!
+
+| | GROUP BY | PARTITION BY |
+|---|---|---|
+| Rows কি কমে? | ✅ হ্যাঁ, collapse হয় | ❌ না, সব row থাকে |
+| কাজ | Aggregate করে | Window calculate করে |
+| অন্য column দেখা যায়? | শুধু grouped column | সব column |
+
+```sql
+-- GROUP BY — rows কমে যায়
+SELECT job_title_short, COUNT(*)
+FROM job_postings_fact
+GROUP BY job_title_short
+
+-- PARTITION BY — rows ঠিক থাকে, extra column যোগ হয়
+SELECT job_location, job_title_short,
+       ROW_NUMBER() OVER (PARTITION BY job_title_short ORDER BY job_location) AS rn
+FROM job_postings_fact
+```
+
+**মোদ্দা কথা:** GROUP BY দিয়ে **summary** বানাও, PARTITION BY দিয়ে **প্রতিটা row রেখে** তার উপর calculation করো।
+
+---
+
+## ROW_NUMBER() কোথায় কাজে লাগে?
+
+সবচেয়ে বড় কাজ হলো — প্রতিটা category থেকে **Top N rows** বের করা।
+
+```sql
+-- প্রতিটা job title থেকে top 3 location বের করো
+SELECT * FROM (
+    SELECT
+        job_location,
+        job_title_short,
+        ROW_NUMBER() OVER (PARTITION BY job_title_short ORDER BY job_location) AS rn
+    FROM job_postings_fact
+) ranked
+WHERE rn <= 3
+```
+
+---
+
+## Quick Summary
+
+| Concept | এক কথায় |
+|---|---|
+| `OVER()` | Window function-এর দরজা |
+| `PARTITION BY` | গ্রুপ করো, কিন্তু rows কমাবে না |
+| `ORDER BY` (OVER-এর ভেতরে) | গ্রুপের ভেতরে সাজাও |
+| `ROW_NUMBER()` | প্রতিটা row-কে নম্বর দাও |
+| Window Function | Row না কমিয়ে calculation করো |
