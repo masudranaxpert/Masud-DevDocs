@@ -3,6 +3,11 @@ title: Subquery
 description: SQL Subquery — কী, কেন, কোথায় লেখে, আর কীভাবে কাজ করে
 ---
 
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
 ## Subquery মানে কী?
 
 Subquery মানে হলো — **একটা query-এর ভেতরে আরেকটা query।**
@@ -16,94 +21,93 @@ WHERE salary > (SELECT AVG(salary) FROM job_postings_fact)
 --              ↑ এটাই Subquery / Inner Query
 ```
 
-সবসময় **Inner query আগে execute হয়,** তারপর তার result Outer query-তে পাঠানো হয়।
+<Callout type="info" title="কোনটা আগে চলে?">
+  সবসময় **Inner query আগে execute হয়,** তারপর তার result Outer query-তে পাঠানো হয়।
+</Callout>
 
 ---
 
-## Subquery কোথায় কোথায় লেখা যায়?
+## Subquery কোথায় কোথায় বসে?
 
-Subquery তিনটা জায়গায় বসতে পারে —
+<Cards>
+  <Card title="WHERE clause-এ" description="সবচেয়ে বেশি ব্যবহার। Dynamic condition দরকার হলে।" />
+  <Card title="FROM clause-এ" description="Subquery কে Temporary Table হিসেবে ব্যবহার করো।" />
+  <Card title="SELECT clause-এ" description="প্রতিটা row-এর সাথে Extra calculated value দেখাতে।" />
+</Cards>
 
-### ১. WHERE clause-এ
+---
 
-সবচেয়ে বেশি ব্যবহার হয়। কোনো condition-এ dynamic value দরকার হলে।
+### তিনটা জায়গায় কীভাবে লেখে?
 
-```sql
--- Average salary-এর চেয়ে বেশি যারা
-SELECT job_title, salary
-FROM job_postings_fact
-WHERE salary > (SELECT AVG(salary) FROM job_postings_fact)
-```
-
-### ২. FROM clause-এ
-
-Subquery কে একটা **temporary table** হিসেবে ব্যবহার করো। এই temporary table-কে বলে **Derived Table।**
-
-```sql
--- প্রতিটা job title-এর average salary বের করো, তারপর ফিল্টার করো
-SELECT *
-FROM (
-    SELECT job_title_short, AVG(salary_year_avg) AS avg_salary
+<Tabs items={['WHERE', 'FROM', 'SELECT']}>
+  <Tab value="WHERE">
+    ```sql
+    -- Average salary-এর চেয়ে বেশি যারা
+    SELECT job_title, salary_year_avg
     FROM job_postings_fact
-    GROUP BY job_title_short
-) AS title_avg
-WHERE avg_salary > 100000
-```
-
-> ⚠️ FROM-এ subquery লিখলে অবশ্যই একটা **alias** দিতে হবে। উপরে `title_avg` দেওয়া আছে।
-
-### ৩. SELECT clause-এ
-
-প্রতিটা row-এর সাথে একটা extra calculated value দেখাতে চাইলে।
-
-```sql
--- প্রতিটা job-এর salary এবং overall average একসাথে দেখাও
-SELECT
-    job_title,
-    salary_year_avg,
-    (SELECT AVG(salary_year_avg) FROM job_postings_fact) AS overall_avg
-FROM job_postings_fact
-```
+    WHERE salary_year_avg > (SELECT AVG(salary_year_avg) FROM job_postings_fact)
+    ```
+    এখানে inner query একটাই number দেয় (AVG), তারপর `>` দিয়ে compare করা হয়।
+  </Tab>
+  <Tab value="FROM">
+    ```sql
+    -- প্রতিটা job title-এর average salary বের করো, তারপর filter করো
+    SELECT *
+    FROM (
+        SELECT job_title_short, AVG(salary_year_avg) AS avg_salary
+        FROM job_postings_fact
+        GROUP BY job_title_short
+    ) AS title_avg
+    WHERE avg_salary > 100000
+    ```
+    <Callout type="warn" title="Alias দিতেই হবে!">
+      FROM-এ subquery লিখলে অবশ্যই একটা **alias** দিতে হবে। উপরে `title_avg` দেওয়া আছে — না দিলে error।
+    </Callout>
+  </Tab>
+  <Tab value="SELECT">
+    ```sql
+    -- প্রতিটা job-এর salary এবং overall average একসাথে দেখাও
+    SELECT
+        job_title,
+        salary_year_avg,
+        (SELECT AVG(salary_year_avg) FROM job_postings_fact) AS overall_avg
+    FROM job_postings_fact
+    ```
+    প্রতিটা row-এর পাশে একটা fixed value (overall average) দেখাবে।
+  </Tab>
+</Tabs>
 
 ---
 
-## Subquery-র ভেতরে কী কী লেখা যায়?
+## Subquery কতটা Return করতে পারে?
 
-প্রায় সব কিছুই — `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY`, `LIMIT`, `JOIN` — সব চলে।
-
-একটাই নিয়ম: **সবসময় parentheses `()` এর ভেতরে লিখতে হবে।**
-
----
-
-## Subquery কতটা return করতে পারে?
-
-| Return type | মানে | কোথায় ব্যবহার |
+| Return Type | মানে | কোথায় ব্যবহার |
 |---|---|---|
 | **Single value** (scalar) | একটাই number/text | `=`, `>`, `<` এর সাথে |
 | **Single column** | অনেক row, একটা column | `IN`, `ANY`, `ALL` এর সাথে |
 | **Full table** | অনেক row, অনেক column | `FROM` clause-এ |
 
 ```sql
--- Single value — AVG একটাই number দেয়
+-- Single value
 WHERE salary > (SELECT AVG(salary) FROM job_postings_fact)
 
--- Single column — IN-এর সাথে list দরকার
+-- Single column — IN এর সাথে
 WHERE job_id IN (SELECT job_id FROM job_postings_fact WHERE job_country = 'US')
 
--- Full table — FROM-এ derived table
-FROM (SELECT * FROM job_postings_fact WHERE salary > 50000) AS high_pay
+-- Full table — FROM এ
+FROM (SELECT * FROM job_postings_fact WHERE salary_year_avg > 50000) AS high_pay
 ```
 
 ---
 
-## Real Example — Window Function-এর সাথে Subquery
+## Real Example — Window Function + Subquery
 
-আগের lesson-এ `ROW_NUMBER()` শিখেছিলাম। Subquery ছাড়া সেটা filter করা যায় না!
+আগের lesson-এ `ROW_NUMBER()` শিখেছিলাম। সেটা filter করতে হলে **Subquery লাগবেই।**
 
-```sql
--- প্রতিটা job title থেকে top 3 highest paying job বের করো
-SELECT *
-FROM (
+<Steps>
+  <Step>
+    ### Inner query-তে ROW_NUMBER() দিয়ে rank করো
+    ```sql
     SELECT
         job_title_short,
         job_location,
@@ -113,42 +117,67 @@ FROM (
             ORDER BY salary_year_avg DESC
         ) AS rn
     FROM job_postings_fact
-) AS ranked
-WHERE rn <= 3
-```
+    ```
+  </Step>
+  <Step>
+    ### Outer query-তে filter করো
+    ```sql
+    SELECT *
+    FROM (
+        SELECT
+            job_title_short,
+            job_location,
+            salary_year_avg,
+            ROW_NUMBER() OVER (
+                PARTITION BY job_title_short
+                ORDER BY salary_year_avg DESC
+            ) AS rn
+        FROM job_postings_fact
+    ) AS ranked
+    WHERE rn <= 3
+    ```
+  </Step>
+</Steps>
 
-**কেন subquery দরকার?**
-`WHERE` clause `ROW_NUMBER()` সরাসরি দেখতে পায় না — কারণ window function execute হয় `WHERE`-এর পরে। তাই আগে subquery-তে `rn` বানাও, তারপর বাইরে filter করো।
+<Callout type="idea" title="কেন সরাসরি WHERE দিয়ে filter করা যায় না?">
+  `WHERE` clause execute হয় `ROW_NUMBER()` এর **আগে।** তাই `rn` column টা তখনও তৈরি হয়নি। Subquery দিয়ে আগে `rn` বানাও, তারপর বাইরে filter করো।
+</Callout>
 
 ---
 
 ## Subquery vs JOIN
 
-অনেক সময় subquery আর JOIN একই কাজ করে।
-
-```sql
--- Subquery দিয়ে
-SELECT job_title FROM job_postings_fact
-WHERE company_id IN (SELECT company_id FROM company_dim WHERE country = 'US')
-
--- JOIN দিয়ে
-SELECT j.job_title FROM job_postings_fact j
-JOIN company_dim c ON j.company_id = c.company_id
-WHERE c.country = 'US'
-```
-
-**কোনটা ব্যবহার করবো?**
-- Subquery — যখন logic টা step-by-step বোঝা সহজ হয়
-- JOIN — যখন অনেক column দরকার হয় বা performance গুরুত্বপূর্ণ
+<Tabs items={['Subquery দিয়ে', 'JOIN দিয়ে']}>
+  <Tab value="Subquery দিয়ে">
+    ```sql
+    SELECT job_title
+    FROM job_postings_fact
+    WHERE company_id IN (
+        SELECT company_id
+        FROM company_dim
+        WHERE country = 'US'
+    )
+    ```
+    পড়তে সহজ, step-by-step বোঝা যায়।
+  </Tab>
+  <Tab value="JOIN দিয়ে">
+    ```sql
+    SELECT j.job_title
+    FROM job_postings_fact j
+    JOIN company_dim c ON j.company_id = c.company_id
+    WHERE c.country = 'US'
+    ```
+    অনেক column দরকার হলে বা performance গুরুত্বপূর্ণ হলে JOIN ভালো।
+  </Tab>
+</Tabs>
 
 ---
 
 ## Quick Summary
 
-| বিষয় | মনে রাখো |
-|---|---|
-| Subquery কী? | Query-এর ভেতরে আরেকটা query |
-| আগে কে চলে? | Inner query আগে, তারপর outer query |
-| কোথায় বসে? | `WHERE`, `FROM`, `SELECT` — তিন জায়গায় |
-| অবশ্যই কী দিতে হবে? | `()` parentheses, আর `FROM`-এ alias |
-| Window function filter? | Subquery ছাড়া সম্ভব না |
+<Callout title="মনে রাখো">
+- Subquery সবসময় `()` parentheses-এর ভেতরে লিখতে হবে
+- Inner query **আগে** চলে, Outer query **পরে**
+- `FROM`-এ subquery লিখলে **alias** দিতেই হবে
+- Window function filter করতে হলে **Subquery ছাড়া উপায় নেই**
+</Callout>
