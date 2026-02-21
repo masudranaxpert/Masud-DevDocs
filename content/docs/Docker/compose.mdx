@@ -38,7 +38,51 @@ networks:        # custom networks (optional)
 
 ---
 
-## সব গুরুত্বপূর্ণ Attributes
+## ✅ Common Attributes — এগুলো দিয়েই ৯০%+ project চলে
+
+| Attribute | উদাহরণ | কী করে? | কখন লাগে? |
+|---|---|---|---|
+| `image` | `image: postgres:16` | Docker Hub থেকে রেডিমেড image নেয় | Database, Redis, Nginx এর মতো pre-built image লাগলে |
+| `build` | `build: .` / `build: ./backend` | নিজের Dockerfile থেকে image build করে | নিজের code/app থেকে custom image বানালে |
+| `ports` | `- "8000:8000"` / `- "80:80"` | Host → Container port map করে | Web app, API বাইরে থেকে access করতে চাইলে |
+| `environment` | `- DEBUG=1` / `- DB_HOST=db` | Container এর ভেতরে env variable সেট করে | ছোট-মাঝারি config, dev/test এ সহজ |
+| `env_file` | `env_file: .env` | আলাদা `.env` file থেকে variables load করে | `SECRET_KEY`, API keys, DB creds লুকিয়ে রাখতে / git এ না পাঠাতে |
+| `volumes` | `- .:/app` / `- pgdata:/var/lib/postgresql/data` | Host folder বা named volume container এ mount করে | Code live reload (dev), persistent data (uploads, db) |
+| `depends_on` | `depends_on: [db]` / `condition: service_healthy` | এই service চালানোর আগে অন্য service চালু হতে হবে | Web app db/redis এর উপর নির্ভর করলে |
+| `healthcheck` | `test: ["CMD", "pg_isready", "-U", "admin"]` | Container healthy কিনা check করে | DB/service ready না হওয়া পর্যন্ত অপেক্ষা করতে |
+| `restart` | `unless-stopped` / `always` / `on-failure` | Container crash/stop হলে auto restart করে | Production এ app সবসময় চালু রাখতে |
+| `command` | `python manage.py runserver 0.0.0.0:8000` | Image এর default command override করে | runserver / gunicorn / celery worker চালাতে |
+| `container_name` | `container_name: my-django-web` | Container এর নাম fix করে | সহজে identify করতে (scale করলে ব্যবহার করা যায় না) |
+| `networks` | `networks: - backend` | Custom network এ join করে | frontend-backend আলাদা network এ রাখতে / security |
+
+<Callout type="info" title="এই ১২টা attributes দিয়েই শুরু করো">
+  উপরের attributes গুলো দিয়ে ৯০%+ সাধারণ project চালানো যায়। বাকিগুলো লাগলে নিচের advanced table দেখো।
+</Callout>
+
+---
+
+## ⚙️ Advanced Attributes — দরকার হলে কাজে আসে
+
+| Attribute | উদাহরণ | কী করে? | কখন লাগে? |
+|---|---|---|---|
+| `profiles` | `profiles: [dev, debug]` | Service কে নির্দিষ্ট profile এ রাখে, `--profile dev` দিলে চালু হয় | dev/debug tool (adminer), staging/prod আলাদা করতে |
+| `deploy` | `replicas: 3` / `memory: 512M` | Swarm mode এ scaling, resource limits সেট করে | Production Swarm cluster এ scaling, CPU/Memory limit দিতে |
+| `configs` | `source: app-config` / `target: /etc/app/config.yml` | Config file container এ mount করে | Production এ config file securely inject করতে |
+| `secrets` | `source: db-pass` / `target: /run/secrets/db_pass` | Sensitive data secure ভাবে container এ দেয় | Production এ DB creds/API keys লুকাতে — `env_file` এর চেয়ে secure |
+| `user` | `user: "1000:1000"` | Container root ছাড়া নির্দিষ্ট user এ চালায় | Security: root privilege এড়াতে (production best practice) |
+| `entrypoint` | `entrypoint: ["/app/entrypoint.sh"]` | Image এর default entrypoint override করে | Custom startup script (wait for DB, migrate) চালাতে |
+| `labels` | `com.example.description: "My web app"` | Container এ metadata/labels যোগ করে | Prometheus, Traefik, logging tools এ auto-discovery |
+| `logging` | `driver: json-file` / `max-size: "10m"` | Logging driver ও options সেট করে | Production এ logs rotate/limit করতে, ELK/Syslog এ পাঠাতে |
+| `extra_hosts` | `- "myhost:192.168.1.100"` | Container এর `/etc/hosts` এ extra entries যোগ করে | Legacy apps এ hostname resolve করতে (DNS না থাকলে) |
+| `shm_size` | `shm_size: 2gb` | `/dev/shm` (shared memory) size বাড়ায় | ML models, বড় PostgreSQL/Redis এ shared memory লাগলে |
+| `ulimits` | `nofile: 65535` | Process limits (open files ইত্যাদি) সেট করে | High-traffic app এ file descriptor limit বাড়াতে |
+| `sysctls` | `net.core.somaxconn: 4096` | Kernel parameters সেট করে | Network tuning (high connections) করতে |
+| `extends` | `file: common.yml` / `service: base-web` | অন্য compose file থেকে service inherit করে | Common configs (restart policy, logging) share করতে |
+| `include` | `include: ../monitoring/compose.yml` | অন্য compose file include করে | Modular setup (base + monitoring + caching আলাদা file) |
+
+---
+
+## Code উদাহরণ
 
 <Tabs items={['image / build', 'ports', 'environment', 'volumes', 'depends_on', 'healthcheck']}>
   <Tab value="image / build">
@@ -76,7 +120,6 @@ networks:        # custom networks (optional)
     services:
       db:
         image: postgres
-        # সরাসরি লেখো
         environment:
           POSTGRES_DB: mydb
           POSTGRES_USER: admin
@@ -100,15 +143,12 @@ networks:        # custom networks (optional)
       db:
         image: postgres
         volumes:
-          # Named volume (persistent)
-          - pgdata:/var/lib/postgresql/data
+          - pgdata:/var/lib/postgresql/data   # Named volume (persistent)
 
       web:
         volumes:
-          # Bind mount (development এ দরকারি)
-          - .:/app          # local code → container এ live reload
+          - .:/app          # Bind mount — local code → live reload
 
-    # Named volume declare করো
     volumes:
       pgdata:
     ```
@@ -124,7 +164,7 @@ networks:        # custom networks (optional)
         build: .
         depends_on:
           db:
-            condition: service_healthy   # db healthy না হওয়া পর্যন্ত wait করো
+            condition: service_healthy   # db healthy না হওয়া পর্যন্ত wait
 
       db:
         image: postgres
@@ -161,6 +201,7 @@ networks:        # custom networks (optional)
 services:
   web:
     build: .
+    container_name: my-web
     ports:
       - "8000:8000"
     environment:
@@ -172,9 +213,12 @@ services:
       db:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - appnet
 
   db:
     image: postgres:16
+    container_name: my-db
     environment:
       POSTGRES_DB: mydb
       POSTGRES_USER: admin
@@ -186,9 +230,14 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - appnet
 
 volumes:
   pgdata:
+
+networks:
+  appnet:
 ```
 
 ---
@@ -220,18 +269,4 @@ docker compose restart web
 
 # Container এ ঢোকো
 docker compose exec web bash
-```
-
----
-
-## restart Policy
-
-```yaml
-services:
-  web:
-    restart: unless-stopped   # সবচেয়ে বেশি ব্যবহার
-    # অন্যান্য options:
-    # no           → কখনো restart করে না (default)
-    # always       → সবসময় restart করে
-    # on-failure   → শুধু error হলে restart করে
 ```
