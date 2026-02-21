@@ -1,0 +1,53 @@
+---
+title: Basics
+description: Docker কী, Container কী, Image কী — একদম গোড়া থেকে
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+## Docker কী?
+
+Docker হলো একটা platform যেটা দিয়ে তুমি তোমার application কে একটা **isolated environment** এ package করে যেকোনো machine এ run করাতে পারো।
+
+> "আমার machine এ কাজ করছে কিন্তু তোমার machine এ করছে না" — এই সমস্যার সমাধান হলো Docker।
+
+<Cards>
+  <Card title="Image" description="Blueprint বা template। Read-only। এটা দিয়ে Container তৈরি হয়।" />
+  <Card title="Container" description="Image থেকে তৈরি running instance। এখানেই app চলে।" />
+  <Card title="Docker Hub" description="Images এর online store। যেকোনো image এখান থেকে pull করা যায়।" />
+</Cards>
+
+---
+
+## Image vs Container
+
+| | Image | Container |
+|---|---|---|
+| কী? | Blueprint | Running instance |
+| Editable? | ❌ Read-only | ✅ Writable layer আছে |
+| একটা থেকে কতটা? | অনেক container | একটাই image |
+
+<Callout type="info" title="সহজ উদাহরণ">
+  Image হলো **রেসিপি**, Container হলো **রান্না করা খাবার।** একটা রেসিপি থেকে অনেকগুলো খাবার বানানো যায়।
+</Callout>
+
+---
+
+## প্রথম Command
+
+```bash
+# Ubuntu image pull করে run করো
+docker run ubuntu
+
+# কী হলো?
+# 1. Local এ ubuntu image আছে কিনা check করলো
+# 2. না থাকলে Docker Hub থেকে pull করলো
+# 3. Image থেকে container তৈরি করলো
+# 4. Run করলো, তারপর বন্ধ হয়ে গেলো
+```
+
+<Callout type="warn" title="কেন বন্ধ হয়ে গেলো?">
+  Container ততক্ষণ চলে যতক্ষণ তার **main process** চলে। Ubuntu এর কোনো main process না থাকায় সাথে সাথে বন্ধ হয়ে যায়।
+</Callout>
