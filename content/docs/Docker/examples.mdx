@@ -1,0 +1,363 @@
+---
+title: Examples
+description: Real Python apps Docker এ চালাও — Django, FastAPI, Flask, Simple Python, আর UV দিয়ে
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+## Python Apps Docker এ
+
+<Tabs items={['Simple Python', 'FastAPI', 'Flask', 'Django']}>
+  <Tab value="Simple Python">
+    ### Project Structure
+    ```
+    myapp/
+    ├── main.py
+    ├── requirements.txt
+    └── Dockerfile
+    ```
+
+    `main.py`:
+    ```python
+    print("Hello from Docker!")
+    ```
+
+    `requirements.txt`:
+    ```
+    requests==2.32.0
+    ```
+
+    `Dockerfile`:
+    ```dockerfile
+    FROM python:3.13-slim
+
+    WORKDIR /app
+
+    COPY requirements.txt .
+    RUN pip install --no-cache-dir -r requirements.txt
+
+    COPY . .
+
+    CMD ["python", "main.py"]
+    ```
+
+    ```bash
+    docker build -t simple-python .
+    docker run simple-python
+    ```
+  </Tab>
+
+  <Tab value="FastAPI">
+    ### Project Structure
+    ```
+    fastapi-app/
+    ├── main.py
+    ├── requirements.txt
+    ├── Dockerfile
+    └── compose.yaml
+    ```
+
+    `main.py`:
+    ```python
+    from fastapi import FastAPI
+
+    app = FastAPI()
+
+    @app.get("/")
+    def read_root():
+        return {"message": "Hello from FastAPI!"}
+    ```
+
+    `requirements.txt`:
+    ```
+    fastapi==0.115.0
+    uvicorn[standard]==0.32.0
+    ```
+
+    `Dockerfile`:
+    ```dockerfile
+    FROM python:3.13-slim
+
+    ENV PYTHONDONTWRITEBYTECODE=1 \
+        PYTHONUNBUFFERED=1
+
+    WORKDIR /app
+
+    COPY requirements.txt .
+    RUN pip install --no-cache-dir -r requirements.txt
+
+    COPY . .
+
+    EXPOSE 8000
+
+    CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ```
+
+    `compose.yaml` (development):
+    ```yaml
+    services:
+      api:
+        build: .
+        ports:
+          - "8000:8000"
+        volumes:
+          - .:/app     # live reload এর জন্য
+        command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    ```
+
+    ```bash
+    docker compose up -d
+    # http://localhost:8000 এ যাও
+    ```
+  </Tab>
+
+  <Tab value="Flask">
+    `app.py`:
+    ```python
+    from flask import Flask
+
+    app = Flask(__name__)
+
+    @app.route("/")
+    def home():
+        return "Hello from Flask!"
+
+    if __name__ == "__main__":
+        app.run(host="0.0.0.0", port=5000)
+    ```
+
+    `requirements.txt`:
+    ```
+    flask==3.1.0
+    gunicorn==23.0.0
+    ```
+
+    `Dockerfile`:
+    ```dockerfile
+    FROM python:3.13-slim
+
+    ENV PYTHONDONTWRITEBYTECODE=1 \
+        PYTHONUNBUFFERED=1
+
+    WORKDIR /app
+
+    COPY requirements.txt .
+    RUN pip install --no-cache-dir -r requirements.txt
+
+    COPY . .
+
+    EXPOSE 5000
+
+    # Development
+    # CMD ["python", "app.py"]
+
+    # Production
+    CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+    ```
+
+    ```bash
+    docker build -t flask-app .
+    docker run -d -p 5000:5000 flask-app
+    ```
+  </Tab>
+
+  <Tab value="Django">
+    ### Django + PostgreSQL
+
+    `Dockerfile`:
+    ```dockerfile
+    FROM python:3.13-slim
+
+    ENV PYTHONDONTWRITEBYTECODE=1 \
+        PYTHONUNBUFFERED=1
+
+    WORKDIR /app
+
+    RUN apt-get update && apt-get install -y \
+        libpq-dev gcc \
+        && rm -rf /var/lib/apt/lists/*
+
+    COPY requirements.txt .
+    RUN pip install --no-cache-dir -r requirements.txt
+
+    COPY . .
+
+    EXPOSE 8000
+
+    CMD ["gunicorn", "myproject.wsgi:application", "--bind", "0.0.0.0:8000"]
+    ```
+
+    `compose.yaml`:
+    ```yaml
+    services:
+      web:
+        build: .
+        ports:
+          - "8000:8000"
+        volumes:
+          - .:/app
+        environment:
+          - DEBUG=True
+          - DATABASE_URL=postgresql://admin:secret@db:5432/mydb
+        command: python manage.py runserver 0.0.0.0:8000
+        depends_on:
+          db:
+            condition: service_healthy
+
+      db:
+        image: postgres:16
+        environment:
+          POSTGRES_DB: mydb
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: secret
+        volumes:
+          - pgdata:/var/lib/postgresql/data
+        healthcheck:
+          test: ["CMD-SHELL", "pg_isready -U admin -d mydb"]
+          interval: 5s
+          retries: 5
+
+    volumes:
+      pgdata:
+    ```
+
+    ```bash
+    # সব চালু করো
+    docker compose up -d
+
+    # Migrations চালাও
+    docker compose exec web python manage.py migrate
+
+    # Superuser তৈরি করো
+    docker compose exec web python manage.py createsuperuser
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## UV দিয়ে Docker (Latest 2025)
+
+UV হলো Rust এ লেখা ultra-fast Python package manager। `pip` এর চেয়ে **10-100x দ্রুত।**
+
+<Callout type="info" title="UV কেন?">
+  Build time কমে নাটকীয়ভাবে। Large projects এ minutes থেকে seconds এ নেমে আসে।
+</Callout>
+
+<Tabs items={['Simple UV', 'FastAPI + UV', 'UV + Compose']}>
+  <Tab value="Simple UV">
+    ```dockerfile
+    FROM python:3.13-slim
+
+    # UV binary copy করো official image থেকে
+    COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+    WORKDIR /app
+
+    ENV UV_COMPILE_BYTECODE=1 \
+        UV_LINK_MODE=copy
+
+    # Lock file আগে copy করো (cache optimization)
+    COPY uv.lock pyproject.toml ./
+
+    # Dependencies install করো (project ছাড়া)
+    RUN --mount=type=cache,target=/root/.cache/uv \
+        uv sync --frozen --no-install-project --no-dev
+
+    # বাকি code copy করো
+    COPY . .
+
+    # Full sync করো
+    RUN --mount=type=cache,target=/root/.cache/uv \
+        uv sync --frozen --no-dev
+
+    # venv এর bin PATH এ যোগ করো
+    ENV PATH="/app/.venv/bin:$PATH"
+
+    CMD ["python", "main.py"]
+    ```
+  </Tab>
+
+  <Tab value="FastAPI + UV">
+    ```dockerfile
+    FROM python:3.13-slim
+
+    COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+    WORKDIR /app
+
+    ENV UV_COMPILE_BYTECODE=1 \
+        UV_LINK_MODE=copy \
+        PYTHONDONTWRITEBYTECODE=1 \
+        PYTHONUNBUFFERED=1
+
+    COPY uv.lock pyproject.toml ./
+    RUN --mount=type=cache,target=/root/.cache/uv \
+        uv sync --frozen --no-install-project --no-dev
+
+    COPY . .
+    RUN --mount=type=cache,target=/root/.cache/uv \
+        uv sync --frozen --no-dev
+
+    ENV PATH="/app/.venv/bin:$PATH"
+
+    EXPOSE 8000
+
+    CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ```
+  </Tab>
+
+  <Tab value="UV + Compose">
+    ```yaml
+    services:
+      api:
+        build: .
+        ports:
+          - "8000:8000"
+        volumes:
+          - .:/app
+        environment:
+          - DEBUG=True
+        command: uvicorn main:app --host 0.0.0.0 --reload
+    ```
+
+    <Steps>
+      <Step>
+        ### UV project initialize করো
+        ```bash
+        uv init myapp
+        cd myapp
+        uv add fastapi uvicorn
+        ```
+      </Step>
+      <Step>
+        ### Dockerfile এ UV use করো
+        উপরের Dockerfile copy করো।
+      </Step>
+      <Step>
+        ### Build ও Run করো
+        ```bash
+        docker compose up -d --build
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+---
+
+## requirements.txt vs pyproject.toml
+
+| | requirements.txt | pyproject.toml (UV) |
+|---|---|---|
+| Tool | pip | uv |
+| Lock file | requirements.txt নিজেই | uv.lock (auto) |
+| Speed | Slow | 10-100x fast |
+| Modern? | Legacy | ✅ Modern standard |
+
+<Callout type="info" title="কোনটা use করবো?">
+  নতুন project শুরু করলে **UV + pyproject.toml** use করো। পুরনো project এ requirements.txt দিয়ে pip চালিয়ে যাও।
+</Callout>

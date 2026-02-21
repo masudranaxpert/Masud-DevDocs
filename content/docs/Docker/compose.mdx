@@ -1,0 +1,237 @@
+---
+title: Compose
+description: Docker Compose — একসাথে অনেক service চালাও একটা file দিয়ে
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+## Docker Compose কী?
+
+একটা `compose.yaml` file এ সব services, networks, volumes একসাথে define করো।
+একটা command এ সব উঠে আসে।
+
+```bash
+docker compose up -d    # সব services চালু
+docker compose down     # সব বন্ধ ও clean
+```
+
+---
+
+## File Structure
+
+```yaml
+services:        # containers define করো
+  web:
+    ...
+  db:
+    ...
+
+volumes:         # persistent storage
+  pgdata:
+
+networks:        # custom networks (optional)
+  mynet:
+```
+
+---
+
+## সব গুরুত্বপূর্ণ Attributes
+
+<Tabs items={['image / build', 'ports', 'environment', 'volumes', 'depends_on', 'healthcheck']}>
+  <Tab value="image / build">
+    ```yaml
+    services:
+      # Option 1: Ready-made image use করো
+      db:
+        image: postgres:16
+
+      # Option 2: নিজের Dockerfile থেকে build করো
+      web:
+        build: .          # current directory তে Dockerfile আছে
+
+      # Option 3: Custom context এবং Dockerfile
+      api:
+        build:
+          context: ./api
+          dockerfile: Dockerfile.prod
+    ```
+  </Tab>
+  <Tab value="ports">
+    ```yaml
+    services:
+      web:
+        ports:
+          - "8000:8000"    # host:container
+          - "8080:80"      # host এর 8080 → container এর 80
+    ```
+    <Callout type="info">
+      Format: `"HOST_PORT:CONTAINER_PORT"`
+    </Callout>
+  </Tab>
+  <Tab value="environment">
+    ```yaml
+    services:
+      db:
+        image: postgres
+        # সরাসরি লেখো
+        environment:
+          POSTGRES_DB: mydb
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: secret
+
+      web:
+        # .env file থেকে নাও
+        env_file:
+          - .env
+    ```
+    `.env` file:
+    ```
+    SECRET_KEY=mysecretkey123
+    DEBUG=True
+    DATABASE_URL=postgresql://admin:secret@db:5432/mydb
+    ```
+  </Tab>
+  <Tab value="volumes">
+    ```yaml
+    services:
+      db:
+        image: postgres
+        volumes:
+          # Named volume (persistent)
+          - pgdata:/var/lib/postgresql/data
+
+      web:
+        volumes:
+          # Bind mount (development এ দরকারি)
+          - .:/app          # local code → container এ live reload
+
+    # Named volume declare করো
+    volumes:
+      pgdata:
+    ```
+    <Callout type="info" title="Named Volume vs Bind Mount">
+      **Named volume** → Docker manage করে, production এ ব্যবহার করো।
+      **Bind mount** (`.:/app`) → Local folder directly mount, development এ ব্যবহার করো।
+    </Callout>
+  </Tab>
+  <Tab value="depends_on">
+    ```yaml
+    services:
+      web:
+        build: .
+        depends_on:
+          db:
+            condition: service_healthy   # db healthy না হওয়া পর্যন্ত wait করো
+
+      db:
+        image: postgres
+        healthcheck:
+          test: ["CMD-SHELL", "pg_isready -U postgres"]
+          interval: 5s
+          timeout: 5s
+          retries: 5
+    ```
+    <Callout type="warn" title="depends_on এর limitation">
+      `depends_on` শুধু নিশ্চিত করে db **start** হয়েছে। `service_healthy` use করলে db **ready** হওয়া পর্যন্ত wait করবে।
+    </Callout>
+  </Tab>
+  <Tab value="healthcheck">
+    ```yaml
+    services:
+      web:
+        image: nginx
+        healthcheck:
+          test: ["CMD", "curl", "-f", "http://localhost"]
+          interval: 30s      # কতক্ষণ পরপর check
+          timeout: 10s       # কতক্ষণ wait করবে
+          retries: 3         # কতবার try করবে
+          start_period: 40s  # start এ কতক্ষণ grace period
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Complete উদাহরণ
+
+```yaml
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=True
+      - DATABASE_URL=postgresql://admin:secret@db:5432/mydb
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: mydb
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d mydb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+```
+
+---
+
+## Commands
+
+```bash
+# সব services চালাও (background)
+docker compose up -d
+
+# Build করে চালাও
+docker compose up -d --build
+
+# Logs দেখো
+docker compose logs -f
+docker compose logs -f web    # শুধু web service
+
+# Status দেখো
+docker compose ps
+
+# সব বন্ধ করো (volumes রেখে)
+docker compose down
+
+# সব বন্ধ করো + volumes মুছো
+docker compose down -v
+
+# একটা service restart করো
+docker compose restart web
+
+# Container এ ঢোকো
+docker compose exec web bash
+```
+
+---
+
+## restart Policy
+
+```yaml
+services:
+  web:
+    restart: unless-stopped   # সবচেয়ে বেশি ব্যবহার
+    # অন্যান্য options:
+    # no           → কখনো restart করে না (default)
+    # always       → সবসময় restart করে
+    # on-failure   → শুধু error হলে restart করে
+```

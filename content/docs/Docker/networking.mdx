@@ -1,0 +1,111 @@
+---
+title: Networking
+description: Docker Network — containers কীভাবে একে অপরের সাথে কথা বলে
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+## Network কেন দরকার?
+
+Docker container গুলো default এ isolated। একটা container অন্যটার সাথে কথা বলতে পারে না।
+
+**Network** তৈরি করলে containers একে অপরকে name দিয়ে চিনতে পারে।
+
+---
+
+## Network Types
+
+<Cards>
+  <Card title="bridge (default)" description="Same host এ containers এর মধ্যে communication। সবচেয়ে বেশি ব্যবহার।" />
+  <Card title="host" description="Container directly host এর network use করে। Port mapping লাগে না।" />
+  <Card title="none" description="কোনো network নেই। Completely isolated।" />
+</Cards>
+
+---
+
+## Commands
+
+```bash
+# সব network দেখো
+docker network ls
+
+# নতুন network তৈরি করো
+docker network create mynetwork
+
+# Network inspect করো
+docker network inspect mynetwork
+
+# Network মুছো
+docker network rm mynetwork
+
+# Container কে network এ connect করো (run করার সময়)
+docker run -d --name webapp --network mynetwork nginx
+
+# চলন্ত container কে network এ যোগ করো
+docker network connect mynetwork mycontainer
+
+# Network থেকে বের করো
+docker network disconnect mynetwork mycontainer
+```
+
+---
+
+## উদাহরণ — Web + Database
+
+```bash
+# Network তৈরি করো
+docker network create appnetwork
+
+# Database চালাও এই network এ
+docker run -d \
+  --name mydb \
+  --network appnetwork \
+  -e POSTGRES_PASSWORD=secret \
+  postgres
+
+# Web app চালাও একই network এ
+docker run -d \
+  --name webapp \
+  --network appnetwork \
+  -e DB_HOST=mydb \    # ← container name দিয়েই connect করা যাচ্ছে!
+  -p 8000:8000 \
+  myapp
+```
+
+<Callout type="info" title="Container Name = Hostname">
+  Same network এ থাকলে container এর **name** দিয়েই অন্য container কে reach করা যায়। IP মনে রাখতে হয় না।
+</Callout>
+
+---
+
+## Docker Compose এ Network
+
+Docker Compose automatically একটা default network তৈরি করে। সব services সেই network এ থাকে।
+
+```yaml
+services:
+  web:
+    image: nginx
+    # web → db কে "db" নামে reach করতে পারবে
+  db:
+    image: postgres
+```
+
+Custom network লাগলে:
+
+```yaml
+services:
+  web:
+    networks:
+      - frontend
+      - backend
+  db:
+    networks:
+      - backend
+
+networks:
+  frontend:
+  backend:
+```

@@ -1,0 +1,142 @@
+---
+title: Commands
+description: Docker এর সব গুরুত্বপূর্ণ command — run, stop, rm, exec, ps এবং আরো
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+## Container চালানো
+
+<Tabs items={['Basic Run', 'Interactive Mode', 'Background Mode']}>
+  <Tab value="Basic Run">
+    ```bash
+    docker run ubuntu
+    ```
+    Image নামিয়ে container চালায়। কোনো process না থাকলে সাথে সাথে বন্ধ।
+  </Tab>
+  <Tab value="Interactive Mode">
+    ```bash
+    docker run -it ubuntu
+    ```
+    `-i` = interactive, `-t` = terminal। Ubuntu এর ভেতরে ঢুকে যাবে।
+    বের হতে `exit` লেখো।
+  </Tab>
+  <Tab value="Background Mode">
+    ```bash
+    docker run -d nginx
+    ```
+    `-d` = detached। Background এ চলবে, terminal block হবে না।
+  </Tab>
+</Tabs>
+
+### run এর সাথে দরকারি flags
+
+```bash
+docker run -d \
+  --name myapp \          # container এর নাম দাও
+  -p 8080:80 \            # host:container port mapping
+  -e DB_HOST=localhost \  # environment variable
+  -v mydata:/app/data \   # volume mount
+  nginx
+```
+
+---
+
+## Container দেখা
+
+```bash
+# শুধু running containers
+docker ps
+
+# সব containers (stopped সহ)
+docker ps -a
+```
+
+| CONTAINER ID | IMAGE | STATUS | NAMES |
+|---|---|---|---|
+| a1b2c3d4 | nginx | Up 2 hours | myapp |
+| e5f6g7h8 | ubuntu | Exited (0) | sad_tesla |
+
+---
+
+## Container বন্ধ ও মুছে ফেলা
+
+```bash
+# Container বন্ধ করো (gracefully)
+docker stop myapp
+docker stop a1b2c3d4   # ID দিয়েও হয়
+
+# Container মুছো (আগে stop করতে হবে)
+docker rm myapp
+
+# Image মুছো
+docker rmi nginx
+docker rmi nginx:latest
+
+# Force remove (running container ও)
+docker rm -f myapp
+```
+
+<Callout type="warn" title="Order মনে রাখো">
+  **Container stop → Container remove → Image remove**। এই order না মানলে error পাবে।
+</Callout>
+
+---
+
+## docker exec — চলন্ত Container এ ঢোকো
+
+`docker exec` দিয়ে একটা **already running** container এর ভেতরে command চালানো যায়।
+
+```bash
+# Container এর ভেতরে bash open করো
+docker exec -it myapp bash
+
+# সরাসরি একটা command চালাও
+docker exec myapp ls /app
+
+# Environment variable দেখো
+docker exec myapp env
+
+# Database backup (MySQL উদাহরণ)
+docker exec mydb mysqldump -u root -p mydb > backup.sql
+```
+
+<Callout type="info" title="exec vs run এর পার্থক্য">
+  `docker run` → **নতুন container** তৈরি করে চালায়।
+  `docker exec` → **চলন্ত container** এ নতুন command চালায়।
+</Callout>
+
+---
+
+## Image দেখা
+
+```bash
+# সব locally stored images
+docker images
+
+# নির্দিষ্ট image pull করো
+docker pull ubuntu:22.04
+docker pull nginx:latest
+```
+
+---
+
+## Quick Reference
+
+| Command | কাজ |
+|---|---|
+| `docker run <image>` | Image থেকে container চালাও |
+| `docker run -it` | Interactive terminal |
+| `docker run -d` | Background এ চালাও |
+| `docker run -p 8080:80` | Port mapping |
+| `docker run -e KEY=VALUE` | Environment variable |
+| `docker ps` | Running containers |
+| `docker ps -a` | সব containers |
+| `docker stop <name/id>` | Container বন্ধ |
+| `docker rm <name/id>` | Container মুছো |
+| `docker rmi <image>` | Image মুছো |
+| `docker exec -it <name> bash` | Container এ ঢোকো |
+| `docker images` | সব images দেখো |
+| `docker pull <image>` | Image নামাও |

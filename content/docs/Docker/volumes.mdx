@@ -1,0 +1,108 @@
+---
+title: Volumes
+description: Docker Volume — Container বন্ধ হলেও data যেন না যায়
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+## Volume কেন দরকার?
+
+Container বন্ধ বা মুছে ফেললে তার ভেতরের সব data **চলে যায়।**
+
+Database, uploaded files, logs — এগুলো রক্ষা করতেই Volume।
+
+<Callout type="warn" title="Volume ছাড়া কী হয়?">
+  Postgres container মুছে ফেললে সব database data হারিয়ে যাবে। Volume দিলে data টিকে থাকে।
+</Callout>
+
+---
+
+## Volume এর ধরন
+
+<Cards>
+  <Card title="Named Volume" description="Docker manage করে। Production এ ব্যবহার করো। `mydata:/app/data`" />
+  <Card title="Bind Mount" description="Local folder directly mount। Development এ ব্যবহার করো। `./src:/app`" />
+  <Card title="Anonymous Volume" description="নাম নেই। Container মুছলে এটাও যায়। সাধারণত avoid করো।" />
+</Cards>
+
+---
+
+## Named Volume Commands
+
+```bash
+# Volume তৈরি করো
+docker volume create mydata
+
+# সব volumes দেখো
+docker volume ls
+
+# Volume inspect করো
+docker volume inspect mydata
+
+# Volume মুছো
+docker volume rm mydata
+
+# অব্যবহৃত সব volumes মুছো
+docker volume prune
+```
+
+---
+
+## Container এ Volume Mount করো
+
+<Tabs items={['docker run এ', 'Compose এ']}>
+  <Tab value="docker run এ">
+    ```bash
+    # Named volume
+    docker run -d \
+      -v mydata:/app/data \
+      myapp
+
+    # Bind mount (local folder)
+    docker run -d \
+      -v ./src:/app \
+      myapp
+
+    # Read-only mount
+    docker run -d \
+      -v mydata:/app/data:ro \
+      myapp
+    ```
+  </Tab>
+  <Tab value="Compose এ">
+    ```yaml
+    services:
+      db:
+        image: postgres:16
+        volumes:
+          - pgdata:/var/lib/postgresql/data   # named volume
+
+      web:
+        build: .
+        volumes:
+          - .:/app                             # bind mount (dev এ)
+
+    # Named volume অবশ্যই এখানে declare করতে হবে
+    volumes:
+      pgdata:
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Named Volume vs Bind Mount কখন কোনটা?
+
+| | Named Volume | Bind Mount |
+|---|---|---|
+| কোথায় store হয়? | Docker manages (`/var/lib/docker/volumes`) | তুমি যেখানে বলবে |
+| Production? | ✅ হ্যাঁ | ❌ না |
+| Development? | পারো | ✅ বেশি উপযুক্ত |
+| Live reload? | ❌ না | ✅ হ্যাঁ |
+| Data sharing? | Multiple containers এ ✅ | ✅ |
+
+<Callout type="info" title="Development Tip">
+  Development এ `- .:/app` bind mount ব্যবহার করো। Local এ code change করলে container এ সাথে সাথে reflect হয় — rebuild লাগে না।
+</Callout>

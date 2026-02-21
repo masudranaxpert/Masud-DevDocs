@@ -1,0 +1,214 @@
+---
+title: Dockerfile
+description: নিজের app কে Docker image বানাও — FROM, COPY, RUN, CMD, EXPOSE এবং আরো
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+## Dockerfile কী?
+
+Dockerfile হলো একটা **text file** যেখানে step-by-step instructions লেখা থাকে কীভাবে একটা Docker image বানাতে হবে।
+
+```bash
+# Dockerfile থেকে image build করো
+docker build -t myapp:latest .
+#            ↑ tag/name      ↑ context (current directory)
+```
+
+---
+
+## সব Instructions
+
+<Cards>
+  <Card title="FROM" description="Base image নির্ধারণ করো। প্রতিটা Dockerfile এ প্রথম instruction।" />
+  <Card title="WORKDIR" description="Container এর ভেতরে working directory সেট করো।" />
+  <Card title="COPY" description="Host থেকে Container এ file copy করো।" />
+  <Card title="RUN" description="Build time এ command চালাও। Layer তৈরি হয়।" />
+  <Card title="ENV" description="Environment variable সেট করো।" />
+  <Card title="EXPOSE" description="Container কোন port এ কথা বলবে জানাও।" />
+  <Card title="CMD" description="Container start হলে default command। শুধু একটাই থাকতে পারে।" />
+  <Card title="ENTRYPOINT" description="Container এর main executable। CMD এর arguments নেয়।" />
+</Cards>
+
+---
+
+## প্রতিটা Instruction বিস্তারিত
+
+<Tabs items={['FROM', 'WORKDIR + COPY', 'RUN', 'ENV', 'EXPOSE', 'CMD vs ENTRYPOINT']}>
+  <Tab value="FROM">
+    ```dockerfile
+    # সবচেয়ে প্রথম instruction — base image
+    FROM python:3.13-slim
+
+    # Official image ব্যবহার করো
+    # -slim মানে minimal version, size ছোট
+    ```
+    <Callout type="info">
+      `python:3.13-slim` — Python 3.13, Debian-based, minimal packages। Production এ এটাই best।
+    </Callout>
+  </Tab>
+  <Tab value="WORKDIR + COPY">
+    ```dockerfile
+    # Container এ /app directory তৈরি করো এবং সেখানে যাও
+    WORKDIR /app
+
+    # Host এর file → Container এ copy
+    COPY requirements.txt .
+    COPY . .
+
+    # COPY <source_in_host> <destination_in_container>
+    ```
+    <Callout type="info" title="কেন আলাদা COPY?">
+      `requirements.txt` আগে copy করলে dependencies layer cache হয়। Code change হলেও dependencies আবার install করতে হয় না — **build fast হয়।**
+    </Callout>
+  </Tab>
+  <Tab value="RUN">
+    ```dockerfile
+    # Build time এ command চালাও
+    RUN pip install --no-cache-dir -r requirements.txt
+
+    # Multiple commands একসাথে (একটাই layer তৈরি হয়)
+    RUN apt-get update && apt-get install -y \
+        curl \
+        wget \
+        && rm -rf /var/lib/apt/lists/*
+    ```
+    <Callout type="warn" title="RUN মানে Build Time">
+      `RUN` শুধু **image build** করার সময় চলে। Container start হলে চলে না।
+    </Callout>
+  </Tab>
+  <Tab value="ENV">
+    ```dockerfile
+    # Environment variable সেট করো
+    ENV PYTHONDONTWRITEBYTECODE=1
+    ENV PYTHONUNBUFFERED=1
+    ENV PORT=8000
+
+    # একসাথেও লেখা যায়
+    ENV PYTHONDONTWRITEBYTECODE=1 \
+        PYTHONUNBUFFERED=1 \
+        PORT=8000
+    ```
+  </Tab>
+  <Tab value="EXPOSE">
+    ```dockerfile
+    # Container কোন port এ listen করবে জানাও
+    EXPOSE 8000
+
+    # শুধু documentation — actually port open করে না
+    # Port open করতে docker run -p লাগে
+    ```
+  </Tab>
+  <Tab value="CMD vs ENTRYPOINT">
+    ```dockerfile
+    # CMD — default command, override করা যায়
+    CMD ["python", "app.py"]
+    CMD ["uvicorn", "main:app", "--host", "0.0.0.0"]
+
+    # ENTRYPOINT — main executable, সহজে override হয় না
+    ENTRYPOINT ["python"]
+    CMD ["app.py"]   # ENTRYPOINT এর argument হিসেবে কাজ করে
+    ```
+    <Callout type="info" title="CMD vs ENTRYPOINT">
+      বেশিরভাগ সময় **CMD** ই যথেষ্ট। ENTRYPOINT তখন লাগে যখন container কে একটা specific executable এর মতো ব্যবহার করতে চাও।
+    </Callout>
+  </Tab>
+</Tabs>
+
+---
+
+## একটা Complete Dockerfile উদাহরণ
+
+```dockerfile
+# Base image
+FROM python:3.13-slim
+
+# Environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Working directory
+WORKDIR /app
+
+# Dependencies আগে copy করো (cache optimization)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# বাকি সব file copy করো
+COPY . .
+
+# Port expose করো
+EXPOSE 8000
+
+# Container start হলে এই command চলবে
+CMD ["python", "app.py"]
+```
+
+---
+
+## Build করো
+
+<Steps>
+  <Step>
+    ### Image build করো
+    ```bash
+    docker build -t myapp:latest .
+    ```
+  </Step>
+  <Step>
+    ### Build সফল হয়েছে কিনা দেখো
+    ```bash
+    docker images
+    # REPOSITORY   TAG     IMAGE ID      SIZE
+    # myapp        latest  abc123def456  150MB
+    ```
+  </Step>
+  <Step>
+    ### Container চালাও
+    ```bash
+    docker run -d -p 8000:8000 myapp:latest
+    ```
+  </Step>
+</Steps>
+
+---
+
+## `.dockerignore` — অপ্রয়োজনীয় file বাদ দাও
+
+Dockerfile এর পাশে `.dockerignore` file রাখো:
+
+```
+__pycache__
+*.pyc
+.env
+.git
+.venv
+node_modules
+*.log
+```
+
+<Callout type="info">
+  `.dockerignore` না থাকলে `COPY . .` করার সময় এই সব জঞ্জাল image এ ঢুকে যায় — image বড় হয়, build slow হয়।
+</Callout>
+
+---
+
+## Layers মনে রাখো
+
+প্রতিটা instruction একটা **layer** তৈরি করে। Docker এই layers cache করে রাখে।
+
+```dockerfile
+FROM python:3.13-slim       # Layer 1 — সবচেয়ে কম change হয়
+WORKDIR /app                # Layer 2
+COPY requirements.txt .     # Layer 3 — dependencies change হলে
+RUN pip install ...         # Layer 4 — এই layer rebuild হয়
+COPY . .                    # Layer 5 — code change হলে এটা rebuild হয়
+CMD ["python", "app.py"]   # Layer 6
+```
+
+<Callout type="info" title="Smart Layering">
+  যা কম change হয় সেটা উপরে রাখো। Code সবচেয়ে বেশি change হয়, তাই COPY . . সবার শেষে।
+</Callout>
