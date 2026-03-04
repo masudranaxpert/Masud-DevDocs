@@ -1,0 +1,247 @@
+---
+title: NumericFunctions
+description: MySQL Numeric ও Aggregate Functions — ABS, ROUND, CEIL, COUNT, SUM, AVG এবং আরো
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+## Numeric Functions
+
+Number এর উপর mathematical operation করে।
+
+---
+
+## ABS — Absolute Value
+
+Negative হলেও positive করে দেয়।
+
+```sql
+SELECT ABS(-42);    -- → 42
+SELECT ABS(42);     -- → 42
+
+-- Difference সবসময় positive রাখো
+SELECT ABS(salary - target_salary) AS difference FROM employees;
+```
+
+---
+
+## ROUND / CEIL / FLOOR / TRUNCATE — Round করো
+
+<Tabs items={['ROUND', 'CEIL / FLOOR', 'TRUNCATE']}>
+  <Tab value="ROUND">
+    ```sql
+    -- নির্দিষ্ট decimal place এ round করো
+    ROUND(number, decimal_places)
+
+    SELECT ROUND(3.456, 2);   -- → 3.46
+    SELECT ROUND(3.454, 2);   -- → 3.45
+    SELECT ROUND(3.5);        -- → 4   (decimal_places না দিলে 0)
+    SELECT ROUND(3.4);        -- → 3
+
+    -- Average salary 2 decimal এ
+    SELECT ROUND(AVG(salary), 2) AS avg_salary FROM employees;
+    ```
+  </Tab>
+  <Tab value="CEIL / FLOOR">
+    ```sql
+    -- CEIL — সবসময় উপরে (Ceiling)
+    SELECT CEIL(3.1);    -- → 4
+    SELECT CEIL(3.9);    -- → 4
+    SELECT CEIL(-3.1);   -- → -3
+
+    -- FLOOR — সবসময় নিচে
+    SELECT FLOOR(3.9);   -- → 3
+    SELECT FLOOR(3.1);   -- → 3
+    SELECT FLOOR(-3.1);  -- → -4
+
+    -- CEILING = CEIL (synonym)
+    SELECT CEILING(3.1); -- → 4
+    ```
+  </Tab>
+  <Tab value="TRUNCATE">
+    ```sql
+    -- Round না করে কেটে ফেলো
+    TRUNCATE(number, decimal_places)
+
+    SELECT TRUNCATE(3.999, 2);    -- → 3.99  (round হয়নি, কাটা হয়েছে)
+    SELECT TRUNCATE(3.999, 0);    -- → 3
+    SELECT TRUNCATE(199.99, -2);  -- → 100   (negative = integer অংশ)
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## MOD — ভাগশেষ
+
+```sql
+-- MOD(dividend, divisor) বা dividend % divisor
+SELECT MOD(10, 3);   -- → 1
+SELECT 10 % 3;       -- → 1
+
+-- জোড় বা বিজোড় check করো
+SELECT id, name,
+    CASE WHEN MOD(id, 2) = 0 THEN 'Even' ELSE 'Odd' END AS parity
+FROM employees;
+```
+
+---
+
+## POWER / SQRT — ঘাত ও বর্গমূল
+
+```sql
+SELECT POWER(2, 10);   -- → 1024  (2^10)
+SELECT POW(2, 10);     -- → 1024  (POW = POWER, same function)
+SELECT SQRT(144);      -- → 12
+SELECT SQRT(2);        -- → 1.4142135623731
+```
+
+---
+
+## RAND — Random Number
+
+```sql
+-- 0 থেকে 1 এর মধ্যে random
+SELECT RAND();          -- → 0.7234...
+
+-- 1 থেকে 100 এর মধ্যে random integer
+SELECT FLOOR(RAND() * 100) + 1;
+
+-- Table থেকে random rows নাও
+SELECT * FROM products ORDER BY RAND() LIMIT 5;
+```
+
+---
+
+## GREATEST / LEAST — সবচেয়ে বড় / ছোট
+
+```sql
+-- একাধিক value এর মধ্যে সবচেয়ে বড়
+SELECT GREATEST(10, 20, 5, 30, 15);   -- → 30
+
+-- সবচেয়ে ছোট
+SELECT LEAST(10, 20, 5, 30, 15);      -- → 5
+
+-- Practical use
+SELECT
+    name,
+    GREATEST(score1, score2, score3) AS best_score,
+    LEAST(score1, score2, score3) AS worst_score
+FROM students;
+```
+
+---
+
+## Aggregate Functions — Group এর উপর কাজ করে
+
+<Callout type="info" title="Aggregate Functions মনে রাখো">
+  Aggregate functions অনেক rows কে একটা value তে পরিণত করে।
+  সাধারণত `GROUP BY` এর সাথে ব্যবহার হয়।
+</Callout>
+
+### COUNT
+
+```sql
+-- মোট rows গোনো
+SELECT COUNT(*) FROM employees;
+
+-- NULL ছাড়া গোনো (column এর NULL count হয় না)
+SELECT COUNT(email) FROM employees;
+
+-- Distinct values গোনো
+SELECT COUNT(DISTINCT department) FROM employees;
+
+-- GROUP BY এর সাথে
+SELECT department, COUNT(*) AS total FROM employees GROUP BY department;
+```
+
+### SUM
+
+```sql
+-- মোট salary
+SELECT SUM(salary) FROM employees;
+
+-- Department ভিত্তিক total salary
+SELECT department, SUM(salary) AS total_salary
+FROM employees
+GROUP BY department;
+
+-- Conditional SUM (CASE এর সাথে)
+SELECT
+    SUM(CASE WHEN status = 'active' THEN salary ELSE 0 END) AS active_total,
+    SUM(CASE WHEN status = 'inactive' THEN salary ELSE 0 END) AS inactive_total
+FROM employees;
+```
+
+### AVG
+
+```sql
+-- Average salary
+SELECT AVG(salary) FROM employees;
+
+-- Average 2 decimal এ
+SELECT ROUND(AVG(salary), 2) AS avg_salary FROM employees;
+
+-- NULL values কে AVG skip করে
+SELECT department, ROUND(AVG(salary), 2) AS avg_sal
+FROM employees
+GROUP BY department
+HAVING AVG(salary) > 50000;
+```
+
+### MAX / MIN
+
+```sql
+-- সবচেয়ে বেশি এবং কম salary
+SELECT MAX(salary) AS highest, MIN(salary) AS lowest FROM employees;
+
+-- প্রতিটা department এর সর্বোচ্চ salary
+SELECT department, MAX(salary) AS top_salary
+FROM employees
+GROUP BY department;
+
+-- সর্বশেষ order date
+SELECT MAX(order_date) AS latest_order FROM orders;
+```
+
+---
+
+## Aggregate Functions একসাথে
+
+```sql
+SELECT
+    department,
+    COUNT(*) AS total,
+    ROUND(AVG(salary), 0) AS avg_salary,
+    MIN(salary) AS min_salary,
+    MAX(salary) AS max_salary,
+    SUM(salary) AS total_payroll
+FROM employees
+GROUP BY department
+ORDER BY avg_salary DESC;
+```
+
+---
+
+## Quick Reference Table
+
+| Function | Syntax | কাজ |
+|---|---|---|
+| `ABS` | `ABS(n)` | Absolute value |
+| `ROUND` | `ROUND(n, d)` | d decimal এ round |
+| `CEIL` | `CEIL(n)` | উপরের integer |
+| `FLOOR` | `FLOOR(n)` | নিচের integer |
+| `TRUNCATE` | `TRUNCATE(n, d)` | কেটে ফেলো (round না করে) |
+| `MOD` | `MOD(a, b)` বা `a % b` | ভাগশেষ |
+| `POWER` | `POWER(x, y)` | x^y |
+| `SQRT` | `SQRT(n)` | বর্গমূল |
+| `RAND` | `RAND()` | 0-1 random |
+| `GREATEST` | `GREATEST(a, b, ...)` | সবচেয়ে বড় |
+| `LEAST` | `LEAST(a, b, ...)` | সবচেয়ে ছোট |
+| `COUNT` | `COUNT(*)` | Rows গোনো |
+| `SUM` | `SUM(col)` | যোগফল |
+| `AVG` | `AVG(col)` | গড় |
+| `MAX` | `MAX(col)` | সর্বোচ্চ |
+| `MIN` | `MIN(col)` | সর্বনিম্ন |

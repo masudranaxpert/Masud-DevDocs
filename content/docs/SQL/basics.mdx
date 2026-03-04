@@ -1,0 +1,173 @@
+---
+title: Basics
+description: SQL এর গোড়ার কথা — SELECT, WHERE, ORDER BY, GROUP BY, HAVING সব কিছু
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+## SQL কী?
+
+SQL (Structured Query Language) হলো database এ data রাখা, খোঁজা, পরিবর্তন করার ভাষা।
+
+<Cards>
+  <Card title="SELECT" description="Data দেখো / পড়ো" />
+  <Card title="INSERT" description="নতুন data যোগ করো" />
+  <Card title="UPDATE" description="পুরনো data পরিবর্তন করো" />
+  <Card title="DELETE" description="Data মুছো" />
+</Cards>
+
+---
+
+## SELECT — Data পড়ো
+
+```sql
+-- সব column দেখো
+SELECT * FROM employees;
+
+-- নির্দিষ্ট column দেখো
+SELECT name, salary FROM employees;
+
+-- Duplicate বাদ দাও
+SELECT DISTINCT department FROM employees;
+```
+
+---
+
+## WHERE — Filter করো
+
+```sql
+-- একটা condition
+SELECT * FROM employees WHERE salary > 50000;
+
+-- Multiple conditions
+SELECT * FROM employees
+WHERE salary > 50000 AND department = 'Engineering';
+
+-- OR
+SELECT * FROM employees
+WHERE department = 'HR' OR department = 'Finance';
+
+-- IN — list থেকে match করো
+SELECT * FROM employees
+WHERE department IN ('HR', 'Finance', 'Marketing');
+
+-- BETWEEN — range
+SELECT * FROM employees
+WHERE salary BETWEEN 40000 AND 80000;
+
+-- LIKE — pattern match
+SELECT * FROM employees WHERE name LIKE 'A%';    -- A দিয়ে শুরু
+SELECT * FROM employees WHERE name LIKE '%Ali%'; -- মাঝে Ali আছে
+SELECT * FROM employees WHERE name LIKE '_li';   -- যেকোনো একটা character + li
+
+-- NULL check
+SELECT * FROM employees WHERE email IS NULL;
+SELECT * FROM employees WHERE email IS NOT NULL;
+```
+
+<Callout type="info" title="LIKE এর wildcard">
+  `%` = যেকোনো সংখ্যক character, `_` = ঠিক একটা character
+</Callout>
+
+---
+
+## ORDER BY — সাজাও
+
+```sql
+-- Ascending (ছোট থেকে বড়) — default
+SELECT * FROM employees ORDER BY salary;
+SELECT * FROM employees ORDER BY salary ASC;
+
+-- Descending (বড় থেকে ছোট)
+SELECT * FROM employees ORDER BY salary DESC;
+
+-- Multiple columns
+SELECT * FROM employees ORDER BY department ASC, salary DESC;
+```
+
+---
+
+## LIMIT — কতটা দেখাবে
+
+```sql
+-- শুধু ৫টা row দেখাও
+SELECT * FROM employees LIMIT 5;
+
+-- ১০টা skip করে পরের ৫টা (pagination)
+SELECT * FROM employees LIMIT 5 OFFSET 10;
+```
+
+---
+
+## GROUP BY — গ্রুপ করো
+
+```sql
+-- প্রতিটা department এ কতজন
+SELECT department, COUNT(*) AS total
+FROM employees
+GROUP BY department;
+
+-- প্রতিটা department এর average salary
+SELECT department, AVG(salary) AS avg_salary
+FROM employees
+GROUP BY department;
+```
+
+<Callout type="warn" title="GROUP BY নিয়ম">
+  SELECT এ যা আছে সেটা হয় GROUP BY তে থাকবে, না হয় aggregate function (COUNT, AVG, SUM ইত্যাদি) এর ভেতরে থাকবে।
+</Callout>
+
+---
+
+## HAVING — Group filter করো
+
+```sql
+-- শুধু সেই departments যেখানে ৫ জনের বেশি কর্মী
+SELECT department, COUNT(*) AS total
+FROM employees
+GROUP BY department
+HAVING COUNT(*) > 5;
+
+-- Average salary ৬০০০০ এর বেশি এমন departments
+SELECT department, AVG(salary) AS avg_sal
+FROM employees
+GROUP BY department
+HAVING AVG(salary) > 60000;
+```
+
+<Callout type="info" title="WHERE vs HAVING">
+  `WHERE` → group করার **আগে** filter করে (individual rows)।
+  `HAVING` → group করার **পরে** filter করে (groups এর উপর)।
+</Callout>
+
+---
+
+## Query চলার Order
+
+SQL query লেখার order আর চলার order আলাদা!
+
+| লেখার Order | চলার Order |
+|---|---|
+| SELECT | FROM |
+| FROM | WHERE |
+| WHERE | GROUP BY |
+| GROUP BY | HAVING |
+| HAVING | SELECT |
+| ORDER BY | ORDER BY |
+| LIMIT | LIMIT |
+
+---
+
+## Quick Reference
+
+```sql
+SELECT column1, column2          -- কোন column
+FROM table_name                  -- কোন table
+WHERE condition                  -- filter (group এর আগে)
+GROUP BY column1                 -- গ্রুপ করো
+HAVING group_condition           -- filter (group এর পরে)
+ORDER BY column1 DESC            -- সাজাও
+LIMIT 10;                        -- কতটা দেখাবে
+```

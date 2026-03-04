@@ -1,0 +1,267 @@
+---
+title: DateFunctions
+description: MySQL Date ও Time Functions — NOW, DATE_FORMAT, DATEDIFF, DATE_ADD এবং আরো
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+## Date ও Time Functions
+
+Date/Time data নিয়ে কাজ করার জন্য MySQL এ অনেক built-in function আছে।
+
+<Callout type="info" title="MySQL Date Format">
+  MySQL এ date সবসময় `'YYYY-MM-DD'` format এ লেখো। যেমন: `'2024-03-15'`
+</Callout>
+
+---
+
+## Current Date ও Time
+
+```sql
+-- বর্তমান date এবং time
+SELECT NOW();              -- → '2024-03-15 14:30:25'
+SELECT SYSDATE();          -- → '2024-03-15 14:30:25' (NOW() এর মতো)
+SELECT CURRENT_TIMESTAMP;  -- → '2024-03-15 14:30:25'
+
+-- শুধু date
+SELECT CURDATE();          -- → '2024-03-15'
+SELECT CURRENT_DATE;       -- → '2024-03-15'
+
+-- শুধু time
+SELECT CURTIME();          -- → '14:30:25'
+SELECT CURRENT_TIME;       -- → '14:30:25'
+```
+
+<Callout type="info" title="NOW() vs SYSDATE()">
+  `NOW()` → Query শুরু হওয়ার সময় (constant throughout query)।
+  `SYSDATE()` → প্রতিবার execute হওয়ার সময় (live time)।
+  বেশিরভাগ ক্ষেত্রে `NOW()` ই use করো।
+</Callout>
+
+---
+
+## Date Parts বের করো
+
+```sql
+-- Year, Month, Day
+SELECT YEAR('2024-03-15');      -- → 2024
+SELECT MONTH('2024-03-15');     -- → 3
+SELECT DAY('2024-03-15');       -- → 15
+SELECT DAYOFMONTH('2024-03-15'); -- → 15 (DAY এর synonym)
+
+-- Hour, Minute, Second
+SELECT HOUR('14:30:25');        -- → 14
+SELECT MINUTE('14:30:25');      -- → 30
+SELECT SECOND('14:30:25');      -- → 25
+
+-- Week, Quarter
+SELECT WEEK('2024-03-15');      -- → 11
+SELECT QUARTER('2024-03-15');   -- → 1
+
+-- Day name এবং Month name
+SELECT DAYNAME('2024-03-15');   -- → 'Friday'
+SELECT MONTHNAME('2024-03-15'); -- → 'March'
+
+-- Day of week (1=Sunday, 7=Saturday)
+SELECT DAYOFWEEK('2024-03-15'); -- → 6 (Friday)
+
+-- Day of year
+SELECT DAYOFYEAR('2024-03-15'); -- → 75
+```
+
+---
+
+## DATE_FORMAT — যেভাবে চাও দেখাও
+
+**Syntax:** `DATE_FORMAT(date, format)`
+
+```sql
+SELECT DATE_FORMAT('2024-03-15', '%d/%m/%Y');   -- → '15/03/2024'
+SELECT DATE_FORMAT('2024-03-15', '%M %d, %Y');  -- → 'March 15, 2024'
+SELECT DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s'); -- → '2024-03-15 14:30:25'
+```
+
+**Common Format Specifiers:**
+
+| Specifier | মানে | উদাহরণ |
+|---|---|---|
+| `%Y` | 4-digit year | 2024 |
+| `%y` | 2-digit year | 24 |
+| `%M` | Month name | March |
+| `%m` | Month number (01-12) | 03 |
+| `%d` | Day (01-31) | 15 |
+| `%D` | Day with suffix | 15th |
+| `%H` | Hour (00-23) | 14 |
+| `%h` | Hour (01-12) | 02 |
+| `%i` | Minute (00-59) | 30 |
+| `%s` | Second (00-59) | 25 |
+| `%p` | AM/PM | PM |
+| `%W` | Weekday name | Friday |
+| `%a` | Abbrev weekday | Fri |
+
+---
+
+## DATEDIFF — দুইটা date এর পার্থক্য
+
+```sql
+-- DATEDIFF(date1, date2) → date1 - date2 (দিনে)
+SELECT DATEDIFF('2024-03-15', '2024-01-01');  -- → 74
+
+-- কতদিন আগে order হয়েছিল
+SELECT
+    order_id,
+    order_date,
+    DATEDIFF(NOW(), order_date) AS days_ago
+FROM orders;
+
+-- ৩০ দিনের মধ্যে expire হবে এমন subscriptions
+SELECT * FROM subscriptions
+WHERE DATEDIFF(expire_date, NOW()) BETWEEN 0 AND 30;
+```
+
+---
+
+## DATE_ADD / DATE_SUB — Date যোগ বা বিয়োগ করো
+
+```sql
+-- DATE_ADD(date, INTERVAL value unit)
+SELECT DATE_ADD('2024-01-01', INTERVAL 1 MONTH);   -- → '2024-02-01'
+SELECT DATE_ADD('2024-01-01', INTERVAL 7 DAY);     -- → '2024-01-08'
+SELECT DATE_ADD('2024-01-01', INTERVAL 1 YEAR);    -- → '2025-01-01'
+SELECT DATE_ADD(NOW(), INTERVAL 30 MINUTE);         -- → 30 মিনিট পরে
+
+-- DATE_SUB(date, INTERVAL value unit)
+SELECT DATE_SUB('2024-03-15', INTERVAL 1 MONTH);   -- → '2024-02-15'
+SELECT DATE_SUB(NOW(), INTERVAL 7 DAY);            -- → ৭ দিন আগে
+
+-- গত ৩০ দিনের orders
+SELECT * FROM orders
+WHERE order_date >= DATE_SUB(NOW(), INTERVAL 30 DAY);
+```
+
+**Available Units:**
+
+```sql
+SECOND, MINUTE, HOUR, DAY, WEEK, MONTH, QUARTER, YEAR
+MINUTE_SECOND, HOUR_MINUTE, DAY_HOUR, YEAR_MONTH
+```
+
+---
+
+## TIMESTAMPDIFF — নির্দিষ্ট unit এ পার্থক্য
+
+```sql
+-- TIMESTAMPDIFF(unit, datetime1, datetime2)
+SELECT TIMESTAMPDIFF(MONTH, '2023-01-01', '2024-03-15');   -- → 14
+SELECT TIMESTAMPDIFF(YEAR, '1990-06-15', NOW());           -- → বয়স
+SELECT TIMESTAMPDIFF(MINUTE, '2024-03-15 09:00', NOW());   -- → মিনিট পার্থক্য
+
+-- কর্মীর বয়স বের করো
+SELECT
+    name,
+    birth_date,
+    TIMESTAMPDIFF(YEAR, birth_date, NOW()) AS age
+FROM employees;
+```
+
+---
+
+## EXTRACT — নির্দিষ্ট অংশ বের করো
+
+```sql
+-- YEAR(), MONTH() এর alternative
+SELECT EXTRACT(YEAR FROM '2024-03-15');    -- → 2024
+SELECT EXTRACT(MONTH FROM '2024-03-15');   -- → 3
+SELECT EXTRACT(DAY FROM '2024-03-15');     -- → 15
+SELECT EXTRACT(HOUR FROM NOW());           -- → 14
+```
+
+---
+
+## STR_TO_DATE — String কে Date বানাও
+
+```sql
+-- String → Date convert করো
+SELECT STR_TO_DATE('15/03/2024', '%d/%m/%Y');   -- → '2024-03-15'
+SELECT STR_TO_DATE('March 15, 2024', '%M %d, %Y'); -- → '2024-03-15'
+
+-- Imported data এর format convert করো
+UPDATE orders
+SET order_date = STR_TO_DATE(raw_date, '%d-%m-%Y')
+WHERE raw_date IS NOT NULL;
+```
+
+---
+
+## Practical Examples
+
+<Tabs items={['Monthly Report', 'Age Calculation', 'Expiry Check']}>
+  <Tab value="Monthly Report">
+    ```sql
+    -- মাস অনুযায়ী sales report
+    SELECT
+        YEAR(order_date) AS year,
+        MONTH(order_date) AS month,
+        MONTHNAME(order_date) AS month_name,
+        COUNT(*) AS total_orders,
+        SUM(amount) AS total_revenue
+    FROM orders
+    WHERE YEAR(order_date) = 2024
+    GROUP BY YEAR(order_date), MONTH(order_date)
+    ORDER BY month;
+    ```
+  </Tab>
+  <Tab value="Age Calculation">
+    ```sql
+    -- কর্মীর বয়স ও কত বছর ধরে কাজ করছে
+    SELECT
+        name,
+        birth_date,
+        TIMESTAMPDIFF(YEAR, birth_date, NOW()) AS age,
+        hire_date,
+        TIMESTAMPDIFF(YEAR, hire_date, NOW()) AS years_of_service
+    FROM employees
+    ORDER BY hire_date;
+    ```
+  </Tab>
+  <Tab value="Expiry Check">
+    ```sql
+    -- Subscription status check
+    SELECT
+        user_id,
+        expire_date,
+        DATEDIFF(expire_date, NOW()) AS days_remaining,
+        CASE
+            WHEN expire_date < NOW() THEN 'Expired'
+            WHEN DATEDIFF(expire_date, NOW()) <= 7 THEN 'Expiring Soon'
+            ELSE 'Active'
+        END AS status
+    FROM subscriptions
+    ORDER BY expire_date;
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Quick Reference Table
+
+| Function | Syntax | কাজ |
+|---|---|---|
+| `NOW()` | `NOW()` | বর্তমান date ও time |
+| `CURDATE()` | `CURDATE()` | বর্তমান date |
+| `CURTIME()` | `CURTIME()` | বর্তমান time |
+| `YEAR()` | `YEAR(date)` | Year বের করো |
+| `MONTH()` | `MONTH(date)` | Month number |
+| `DAY()` | `DAY(date)` | Day number |
+| `DATE_FORMAT()` | `DATE_FORMAT(date, fmt)` | Format করো |
+| `DATEDIFF()` | `DATEDIFF(d1, d2)` | দিনের পার্থক্য |
+| `DATE_ADD()` | `DATE_ADD(date, INTERVAL n unit)` | Date যোগ করো |
+| `DATE_SUB()` | `DATE_SUB(date, INTERVAL n unit)` | Date বিয়োগ করো |
+| `TIMESTAMPDIFF()` | `TIMESTAMPDIFF(unit, d1, d2)` | নির্দিষ্ট unit এ পার্থক্য |
+| `STR_TO_DATE()` | `STR_TO_DATE(str, fmt)` | String → Date |
+| `DAYNAME()` | `DAYNAME(date)` | Day এর নাম |
+| `MONTHNAME()` | `MONTHNAME(date)` | Month এর নাম |
+| `EXTRACT()` | `EXTRACT(unit FROM date)` | Part বের করো |

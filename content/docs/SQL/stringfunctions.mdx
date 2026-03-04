@@ -1,0 +1,355 @@
+---
+title: StringFunctions
+description: MySQL এর সব String Functions — SUBSTRING, LOCATE, TRIM, CONCAT এবং আরো
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+## String Functions কী?
+
+String function দিয়ে text data কে manipulate করা যায় — কাটা, জোড়া লাগানো, খোঁজা, পরিষ্কার করা।
+
+---
+
+## SUBSTRING — নির্দিষ্ট অংশ কাটো
+
+একটা string থেকে নির্দিষ্ট অংশ বের করো।
+
+**Syntax:**
+```sql
+SUBSTRING(string, start_position, length)
+SUBSTRING(string, start_position)   -- length না দিলে শেষ পর্যন্ত
+```
+
+<Callout type="info" title="Position গণনা">
+  MySQL এ string এর প্রথম character এর position হলো **1** (0 না)।
+  Negative position দিলে **শেষ থেকে** গোনে।
+</Callout>
+
+```sql
+-- 'Hello World' থেকে 'World' বের করো
+SELECT SUBSTRING('Hello World', 7);
+-- → 'World'
+
+-- 'Hello World' থেকে 'Hello' বের করো
+SELECT SUBSTRING('Hello World', 1, 5);
+-- → 'Hello'
+
+-- শেষ থেকে ৫টা character
+SELECT SUBSTRING('Hello World', -5);
+-- → 'World'
+
+-- Table এ ব্যবহার
+SELECT
+    email,
+    SUBSTRING(email, 1, LOCATE('@', email) - 1) AS username
+FROM users;
+```
+
+<Callout type="info">
+  `SUBSTR()` এবং `MID()` — এই দুইটা `SUBSTRING()` এর synonyms। একই কাজ করে।
+</Callout>
+
+---
+
+## SUBSTRING_INDEX — Delimiter দিয়ে কাটো
+
+একটা separator দিয়ে string কে ভাগ করে নির্দিষ্ট অংশ নাও।
+
+**Syntax:**
+```sql
+SUBSTRING_INDEX(string, delimiter, count)
+```
+
+- `count` positive → বাম থেকে ঐ সংখ্যক part নাও
+- `count` negative → ডান থেকে ঐ সংখ্যক part নাও
+
+```sql
+-- Email থেকে username বের করো
+SELECT SUBSTRING_INDEX('rahim@gmail.com', '@', 1);
+-- → 'rahim'
+
+-- Email থেকে domain বের করো
+SELECT SUBSTRING_INDEX('rahim@gmail.com', '@', -1);
+-- → 'gmail.com'
+
+-- IP address থেকে অংশ বের করো
+SELECT SUBSTRING_INDEX('192.168.1.100', '.', 2);
+-- → '192.168'
+
+-- URL থেকে protocol বের করো
+SELECT SUBSTRING_INDEX('https://example.com/path', '://', 1);
+-- → 'https'
+
+-- Comma separated list থেকে প্রথমটা
+SELECT SUBSTRING_INDEX('Python,JavaScript,SQL', ',', 1);
+-- → 'Python'
+
+-- শেষেরটা
+SELECT SUBSTRING_INDEX('Python,JavaScript,SQL', ',', -1);
+-- → 'SQL'
+```
+
+---
+
+## LOCATE — কোথায় আছে খোঁজো
+
+একটা substring কোন position এ আছে সেটা বের করো।
+
+**Syntax:**
+```sql
+LOCATE(substring, string)
+LOCATE(substring, string, start_position)  -- কোথা থেকে খুঁজবে
+```
+
+- পাওয়া গেলে position return করে (1 থেকে শুরু)
+- না পাওয়া গেলে `0` return করে
+
+```sql
+SELECT LOCATE('bar', 'foobarbar');
+-- → 4  (প্রথম 'bar' এর position)
+
+SELECT LOCATE('bar', 'foobarbar', 5);
+-- → 7  (position 5 থেকে খুঁজলে দ্বিতীয় 'bar' পাবে)
+
+SELECT LOCATE('xyz', 'foobarbar');
+-- → 0  (পাওয়া যায়নি)
+
+-- Email এ @ আছে কিনা check করো
+SELECT email,
+    CASE
+        WHEN LOCATE('@', email) > 0 THEN 'Valid'
+        ELSE 'Invalid'
+    END AS email_check
+FROM users;
+
+-- @ এর আগের অংশ (username) বের করো
+SELECT
+    email,
+    SUBSTRING(email, 1, LOCATE('@', email) - 1) AS username
+FROM users;
+```
+
+<Callout type="info">
+  `INSTR(string, substring)` — LOCATE এর মতোই, কিন্তু argument order উল্টো।
+  `POSITION(substring IN string)` — আরেকটা synonym।
+</Callout>
+
+---
+
+## TRIM — Whitespace বা Character সরাও
+
+String এর শুরু ও শেষ থেকে space বা নির্দিষ্ট character সরাও।
+
+**Syntax:**
+```sql
+TRIM(string)                            -- দুই পাশের space সরাও
+TRIM(LEADING 'char' FROM string)        -- শুরু থেকে সরাও
+TRIM(TRAILING 'char' FROM string)       -- শেষ থেকে সরাও
+TRIM(BOTH 'char' FROM string)           -- দুই পাশ থেকে সরাও
+LTRIM(string)                           -- বাম পাশের space সরাও
+RTRIM(string)                           -- ডান পাশের space সরাও
+```
+
+```sql
+-- Space সরাও
+SELECT TRIM('  Hello World  ');
+-- → 'Hello World'
+
+SELECT LTRIM('  Hello');
+-- → 'Hello'
+
+SELECT RTRIM('Hello  ');
+-- → 'Hello'
+
+-- নির্দিষ্ট character সরাও
+SELECT TRIM(BOTH '_' FROM '__Hello__');
+-- → 'Hello'
+
+SELECT TRIM(LEADING '0' FROM '0001234');
+-- → '1234'  (leading zeros সরানো)
+
+SELECT TRIM(TRAILING '.' FROM 'Hello...');
+-- → 'Hello'
+
+-- Database column থেকে dirty data clean করো
+SELECT TRIM(name) AS clean_name
+FROM users
+WHERE TRIM(name) != name;  -- যাদের নামে extra space আছে
+```
+
+<Callout type="warn" title="TRIM মাঝের space সরায় না">
+  `TRIM('Hello  World')` → `'Hello  World'` (মাঝের space থাকবে!)
+  মাঝের space সরাতে `REPLACE(str, '  ', ' ')` বা অন্য technique লাগবে।
+</Callout>
+
+---
+
+## CONCAT — জোড়া লাগাও
+
+দুই বা ততোধিক string একসাথে জোড়া লাগাও।
+
+**Syntax:**
+```sql
+CONCAT(str1, str2, ...)
+CONCAT_WS(separator, str1, str2, ...)   -- separator দিয়ে জোড়া লাগাও
+```
+
+```sql
+SELECT CONCAT('Hello', ' ', 'World');
+-- → 'Hello World'
+
+SELECT CONCAT(first_name, ' ', last_name) AS full_name
+FROM users;
+
+-- CONCAT_WS — separator দিয়ে
+SELECT CONCAT_WS(', ', city, state, country) AS address
+FROM locations;
+-- → 'Dhaka, Dhaka Division, Bangladesh'
+
+-- NULL থাকলে CONCAT পুরোটা NULL দেয়
+SELECT CONCAT('Hello', NULL, 'World');  -- → NULL
+
+-- CONCAT_WS NULL skip করে
+SELECT CONCAT_WS(', ', 'Hello', NULL, 'World');  -- → 'Hello, World'
+```
+
+---
+
+## LENGTH / CHAR_LENGTH — দৈর্ঘ্য মাপো
+
+```sql
+-- Bytes এ length (multibyte character এ পার্থক্য হয়)
+SELECT LENGTH('Hello');        -- → 5
+SELECT LENGTH('হ্যালো');       -- → বেশি (UTF-8 এ বাংলা 3 bytes/char)
+
+-- Characters এ length (সবসময় এটাই use করো)
+SELECT CHAR_LENGTH('Hello');   -- → 5
+SELECT CHAR_LENGTH('হ্যালো');  -- → 5
+
+-- Practical use
+SELECT name FROM users WHERE CHAR_LENGTH(name) > 50;
+```
+
+---
+
+## UPPER / LOWER — Case পরিবর্তন
+
+```sql
+SELECT UPPER('hello world');   -- → 'HELLO WORLD'
+SELECT LOWER('HELLO WORLD');   -- → 'hello world'
+
+-- Case-insensitive comparison
+SELECT * FROM users
+WHERE LOWER(email) = LOWER('User@Gmail.COM');
+```
+
+---
+
+## LEFT / RIGHT — শুরু বা শেষ থেকে নাও
+
+```sql
+-- বাম থেকে n character
+SELECT LEFT('Hello World', 5);   -- → 'Hello'
+
+-- ডান থেকে n character
+SELECT RIGHT('Hello World', 5);  -- → 'World'
+
+-- Phone number এর শেষ ৪ digit
+SELECT RIGHT(phone, 4) AS last4 FROM users;
+
+-- File extension বের করো
+SELECT RIGHT(filename, 3) AS extension FROM files;
+```
+
+---
+
+## REPLACE — Replace করো
+
+```sql
+-- REPLACE(string, find, replace_with)
+SELECT REPLACE('Hello World', 'World', 'SQL');
+-- → 'Hello SQL'
+
+-- Space গুলো underscore দিয়ে replace করো
+SELECT REPLACE('Hello World', ' ', '_');
+-- → 'Hello_World'
+
+-- Table update করো
+UPDATE products
+SET description = REPLACE(description, 'old_term', 'new_term');
+```
+
+---
+
+## REVERSE — উল্টো করো
+
+```sql
+SELECT REVERSE('Hello');   -- → 'olleH'
+SELECT REVERSE('12345');   -- → '54321'
+```
+
+---
+
+## LPAD / RPAD — Padding যোগ করো
+
+```sql
+-- বাম দিকে padding (মোট ৮ character)
+SELECT LPAD('42', 8, '0');   -- → '00000042'
+
+-- ডান দিকে padding
+SELECT RPAD('Hello', 10, '.');   -- → 'Hello.....'
+
+-- ID formatting
+SELECT LPAD(id, 6, '0') AS formatted_id FROM orders;
+-- 1 → '000001', 42 → '000042'
+```
+
+---
+
+## REPEAT — বারবার লেখো
+
+```sql
+SELECT REPEAT('Ha', 3);     -- → 'HaHaHa'
+SELECT REPEAT('*', 10);     -- → '**********'
+```
+
+---
+
+## STRCMP — দুইটা string তুলনা করো
+
+```sql
+-- 0 = equal, -1 = প্রথমটা আগে, 1 = প্রথমটা পরে
+SELECT STRCMP('abc', 'abc');   -- → 0
+SELECT STRCMP('abc', 'xyz');   -- → -1
+SELECT STRCMP('xyz', 'abc');   -- → 1
+```
+
+---
+
+## Quick Reference Table
+
+| Function | Syntax | কাজ |
+|---|---|---|
+| `SUBSTRING` | `SUBSTRING(str, pos, len)` | নির্দিষ্ট position থেকে কাটো |
+| `SUBSTRING_INDEX` | `SUBSTRING_INDEX(str, delim, n)` | Delimiter দিয়ে কাটো |
+| `LOCATE` | `LOCATE(substr, str)` | Position খোঁজো |
+| `TRIM` | `TRIM(str)` | দুই পাশের space সরাও |
+| `LTRIM` | `LTRIM(str)` | বাম পাশের space সরাও |
+| `RTRIM` | `RTRIM(str)` | ডান পাশের space সরাও |
+| `CONCAT` | `CONCAT(s1, s2, ...)` | জোড়া লাগাও |
+| `CONCAT_WS` | `CONCAT_WS(sep, s1, s2)` | Separator দিয়ে জোড়া লাগাও |
+| `LENGTH` | `LENGTH(str)` | Bytes এ দৈর্ঘ্য |
+| `CHAR_LENGTH` | `CHAR_LENGTH(str)` | Characters এ দৈর্ঘ্য |
+| `UPPER` | `UPPER(str)` | Uppercase করো |
+| `LOWER` | `LOWER(str)` | Lowercase করো |
+| `LEFT` | `LEFT(str, n)` | বাম থেকে n character |
+| `RIGHT` | `RIGHT(str, n)` | ডান থেকে n character |
+| `REPLACE` | `REPLACE(str, find, rep)` | Replace করো |
+| `REVERSE` | `REVERSE(str)` | উল্টো করো |
+| `LPAD` | `LPAD(str, len, pad)` | বাম দিকে padding |
+| `RPAD` | `RPAD(str, len, pad)` | ডান দিকে padding |
+| `REPEAT` | `REPEAT(str, n)` | n বার repeat করো |
+| `INSTR` | `INSTR(str, substr)` | Position খোঁজো (LOCATE এর মতো) |

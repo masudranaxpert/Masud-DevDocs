@@ -1,0 +1,184 @@
+---
+title: Joins
+description: SQL JOIN — একাধিক table একসাথে query করো
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+## JOIN কেন দরকার?
+
+Real database এ data সাধারণত অনেক table এ ভাগ করা থাকে। JOIN দিয়ে একাধিক table এক query তে একসাথে আনা যায়।
+
+```
+employees table:          departments table:
+id | name | dept_id      id | dept_name
+1  | Rahim | 2           1  | HR
+2  | Karim | 1           2  | Engineering
+3  | Sadia | 2           3  | Finance
+```
+
+---
+
+## JOIN এর ধরন
+
+<Cards>
+  <Card title="INNER JOIN" description="দুই table এ match করে এমন rows শুধু দেখাবে। সবচেয়ে বেশি ব্যবহার।" />
+  <Card title="LEFT JOIN" description="বাম table এর সব rows + ডান table থেকে যা match করে।" />
+  <Card title="RIGHT JOIN" description="ডান table এর সব rows + বাম table থেকে যা match করে।" />
+  <Card title="CROSS JOIN" description="দুই table এর সব possible combination। সাবধানে ব্যবহার করো।" />
+</Cards>
+
+---
+
+## INNER JOIN
+
+দুই table এ **match করে** এমন rows শুধু দেখাবে।
+
+### Syntax
+
+```sql
+SELECT কোন_কোন_column
+FROM প্রথম_table
+INNER JOIN দ্বিতীয়_table
+ON প্রথম_table.column = দ্বিতীয়_table.column;
+```
+
+### উদাহরণ
+
+```sql
+SELECT employees.name, departments.dept_name
+FROM employees
+INNER JOIN departments
+ON employees.dept_id = departments.id;
+```
+
+**Result:**
+
+| name | dept_name |
+|---|---|
+| Rahim | Engineering |
+| Karim | HR |
+| Sadia | Engineering |
+
+<Callout type="info" title="Foreign Key হতেই হবে না">
+  `ON` এর মধ্যে যেকোনো দুইটা column equal হলেই হয় — Foreign Key/Primary Key বাধ্যতামূলক না। শুধু value match করলেই JOIN কাজ করবে।
+</Callout>
+
+---
+
+## Alias দিয়ে সংক্ষিপ্ত করো
+
+Table এর নাম alias দিলে query ছোট হয়:
+
+```sql
+-- e = employees, d = departments
+SELECT e.name, e.salary, d.dept_name
+FROM employees e
+INNER JOIN departments d ON e.dept_id = d.id
+WHERE d.dept_name = 'Engineering'
+ORDER BY e.salary DESC;
+```
+
+---
+
+## LEFT JOIN
+
+বাম table (FROM) এর **সব rows** দেখাবে। ডান table এ match না থাকলে `NULL` আসবে।
+
+```sql
+SELECT e.name, d.dept_name
+FROM employees e
+LEFT JOIN departments d ON e.dept_id = d.id;
+```
+
+| name | dept_name |
+|---|---|
+| Rahim | Engineering |
+| Karim | HR |
+| Nadia | NULL ← কোনো department নেই |
+
+<Callout type="info" title="কখন LEFT JOIN?">
+  "সব employees দেখাও, department থাকুক বা না থাকুক" — এই ধরনের প্রশ্নে LEFT JOIN।
+</Callout>
+
+---
+
+## Multiple JOIN
+
+একসাথে তিনটা table JOIN করা যায়:
+
+```sql
+SELECT
+    e.name,
+    d.dept_name,
+    p.project_name
+FROM employees e
+INNER JOIN departments d ON e.dept_id = d.id
+INNER JOIN projects p ON e.project_id = p.id
+WHERE d.dept_name = 'Engineering';
+```
+
+---
+
+## JOIN এর সাথে GROUP BY
+
+```sql
+-- প্রতিটা department এ কতজন কর্মী এবং average salary
+SELECT
+    d.dept_name,
+    COUNT(e.id) AS total_employees,
+    AVG(e.salary) AS avg_salary
+FROM departments d
+LEFT JOIN employees e ON d.id = e.dept_id
+GROUP BY d.dept_name
+ORDER BY avg_salary DESC;
+```
+
+---
+
+## JOIN এর Comparison
+
+<Tabs items={['INNER JOIN', 'LEFT JOIN', 'RIGHT JOIN']}>
+  <Tab value="INNER JOIN">
+    ```sql
+    SELECT e.name, d.dept_name
+    FROM employees e
+    INNER JOIN departments d ON e.dept_id = d.id;
+    -- শুধু যাদের department আছে তারাই আসবে
+    ```
+    Venn diagram: দুই circle এর **intersection**
+  </Tab>
+  <Tab value="LEFT JOIN">
+    ```sql
+    SELECT e.name, d.dept_name
+    FROM employees e
+    LEFT JOIN departments d ON e.dept_id = d.id;
+    -- সব employee আসবে, department না থাকলে NULL
+    ```
+    Venn diagram: বাম circle পুরোটা + intersection
+  </Tab>
+  <Tab value="RIGHT JOIN">
+    ```sql
+    SELECT e.name, d.dept_name
+    FROM employees e
+    RIGHT JOIN departments d ON e.dept_id = d.id;
+    -- সব department আসবে, employee না থাকলে NULL
+    ```
+    Venn diagram: ডান circle পুরোটা + intersection
+  </Tab>
+</Tabs>
+
+---
+
+## Self JOIN — একই table নিজের সাথে
+
+```sql
+-- Manager এর নাম বের করো (manager ও employee table এর মধ্যেই আছে)
+SELECT
+    e.name AS employee,
+    m.name AS manager
+FROM employees e
+LEFT JOIN employees m ON e.manager_id = m.id;
+```

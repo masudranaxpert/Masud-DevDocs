@@ -1,0 +1,206 @@
+---
+title: AdvancedFunctions
+description: MySQL Advanced Functions — COALESCE, IFNULL, IF, CAST, CONVERT, NULLIF এবং আরো
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+## Control Flow Functions
+
+Condition অনুযায়ী আলাদা value return করে।
+
+---
+
+## IF — সহজ Condition
+
+```sql
+-- IF(condition, true_value, false_value)
+SELECT IF(salary > 50000, 'High', 'Low') AS salary_band FROM employees;
+
+-- NULL check
+SELECT IF(email IS NULL, 'No Email', email) AS contact FROM users;
+
+-- Conditional count
+SELECT
+    COUNT(*) AS total,
+    SUM(IF(status = 'active', 1, 0)) AS active_count,
+    SUM(IF(status = 'inactive', 1, 0)) AS inactive_count
+FROM employees;
+```
+
+<Callout type="info" title="IF vs CASE">
+  Simple 2-option condition → `IF()` সহজ।
+  Multiple conditions → `CASE WHEN` ব্যবহার করো।
+</Callout>
+
+---
+
+## IFNULL — NULL হলে replace করো
+
+```sql
+-- IFNULL(value, replacement_if_null)
+SELECT IFNULL(phone, 'N/A') AS phone FROM users;
+SELECT IFNULL(bonus, 0) AS bonus FROM employees;  -- NULL bonus কে 0 করো
+
+-- Calculation এ NULL avoid করো
+SELECT salary + IFNULL(bonus, 0) AS total_compensation FROM employees;
+```
+
+---
+
+## COALESCE — প্রথম Non-NULL value নাও
+
+একাধিক column এর মধ্যে প্রথম non-NULL টা return করে।
+
+```sql
+-- COALESCE(val1, val2, val3, ...)
+SELECT COALESCE(mobile, phone, email, 'No Contact') AS contact
+FROM users;
+-- mobile আছে? → mobile দাও
+-- mobile নেই, phone আছে? → phone দাও
+-- দুইটাই নেই, email আছে? → email দাও
+-- সব NULL? → 'No Contact' দাও
+
+-- COALESCE vs IFNULL
+-- IFNULL শুধু দুইটা argument নেয়
+-- COALESCE যতগুলো দরকার নিতে পারে
+```
+
+---
+
+## NULLIF — দুইটা same হলে NULL দাও
+
+```sql
+-- NULLIF(expr1, expr2)
+-- expr1 = expr2 হলে NULL return করে, না হলে expr1 return করে
+SELECT NULLIF(10, 10);    -- → NULL
+SELECT NULLIF(10, 20);    -- → 10
+
+-- Division by zero avoid করো
+SELECT total / NULLIF(quantity, 0) AS unit_price FROM orders;
+-- quantity = 0 হলে NULL আসবে, error না হয়ে
+```
+
+---
+
+## CAST / CONVERT — Data Type পরিবর্তন
+
+<Tabs items={['CAST', 'CONVERT']}>
+  <Tab value="CAST">
+    ```sql
+    -- CAST(value AS type)
+    SELECT CAST('123' AS UNSIGNED);       -- → 123 (string → integer)
+    SELECT CAST('3.14' AS DECIMAL(5,2));  -- → 3.14
+    SELECT CAST(123 AS CHAR);            -- → '123' (integer → string)
+    SELECT CAST('2024-03-15' AS DATE);   -- → 2024-03-15
+    SELECT CAST(NOW() AS DATE);          -- → '2024-03-15' (datetime → date)
+
+    -- Available types
+    -- BINARY, CHAR, DATE, DATETIME, DECIMAL, FLOAT, DOUBLE
+    -- JSON, SIGNED, TIME, UNSIGNED
+    ```
+  </Tab>
+  <Tab value="CONVERT">
+    ```sql
+    -- CONVERT(value, type) — CAST এর মতোই
+    SELECT CONVERT('123', UNSIGNED);     -- → 123
+    SELECT CONVERT('3.14', DECIMAL(5,2)); -- → 3.14
+
+    -- Character set convert করো
+    SELECT CONVERT('Hello' USING utf8mb4);
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## FORMAT — Number সুন্দর করে দেখাও
+
+```sql
+-- FORMAT(number, decimal_places, locale)
+SELECT FORMAT(1234567.891, 2);       -- → '1,234,567.89'
+SELECT FORMAT(1234567.891, 0);       -- → '1,234,568'
+SELECT FORMAT(salary, 2) AS salary_formatted FROM employees;
+```
+
+---
+
+## ISNULL / IS NULL — NULL check করো
+
+```sql
+-- IS NULL এবং IS NOT NULL
+SELECT * FROM users WHERE phone IS NULL;
+SELECT * FROM users WHERE phone IS NOT NULL;
+
+-- ISNULL() function — 1 বা 0 return করে
+SELECT ISNULL(phone) FROM users;   -- phone = NULL → 1, অন্যথায় 0
+```
+
+---
+
+## GROUP_CONCAT — Group এর values একসাথে দেখাও
+
+```sql
+-- GROUP_CONCAT(column ORDER BY column SEPARATOR 'sep')
+SELECT
+    department,
+    GROUP_CONCAT(name ORDER BY name SEPARATOR ', ') AS employee_names
+FROM employees
+GROUP BY department;
+
+-- Result:
+-- Engineering | Rahim, Reza, Sadia
+-- HR          | Karim, Nasrin
+```
+
+<Callout type="info" title="GROUP_CONCAT এর default separator">
+  Default separator হলো comma (`,`)। Custom separator দিতে `SEPARATOR` keyword ব্যবহার করো।
+</Callout>
+
+---
+
+## DISTINCT ও UNIQUE values
+
+```sql
+-- DISTINCT — duplicate বাদ দাও
+SELECT DISTINCT department FROM employees;
+
+-- COUNT DISTINCT
+SELECT COUNT(DISTINCT city) AS unique_cities FROM users;
+```
+
+---
+
+## Quick Reference Table
+
+| Function | Syntax | কাজ |
+|---|---|---|
+| `IF` | `IF(cond, true, false)` | Simple condition |
+| `IFNULL` | `IFNULL(val, default)` | NULL হলে replace |
+| `COALESCE` | `COALESCE(v1, v2, ...)` | প্রথম non-NULL |
+| `NULLIF` | `NULLIF(a, b)` | a=b হলে NULL |
+| `CAST` | `CAST(val AS type)` | Type convert |
+| `CONVERT` | `CONVERT(val, type)` | Type convert |
+| `FORMAT` | `FORMAT(n, d)` | Number format |
+| `ISNULL` | `ISNULL(val)` | NULL কিনা (0/1) |
+| `GROUP_CONCAT` | `GROUP_CONCAT(col)` | Group এর values জোড়া |
+
+---
+
+## Practical Example — সব একসাথে
+
+```sql
+SELECT
+    e.id,
+    COALESCE(e.nickname, e.name) AS display_name,
+    IFNULL(e.phone, 'N/A') AS contact,
+    FORMAT(e.salary + IFNULL(e.bonus, 0), 2) AS total_compensation,
+    IF(e.is_active = 1, 'Active', 'Inactive') AS status,
+    CAST(e.hire_date AS DATE) AS start_date,
+    TIMESTAMPDIFF(YEAR, e.hire_date, NOW()) AS years_served
+FROM employees e
+WHERE e.salary / NULLIF(e.target_salary, 0) >= 0.8
+ORDER BY e.salary DESC;
+```

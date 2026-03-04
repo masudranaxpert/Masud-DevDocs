@@ -1,0 +1,245 @@
+---
+title: Select
+description: SELECT এর tricks — Alias, Fixed Value Column, CASE WHEN THEN END
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+## Alias — নাম বদলে দাও
+
+Alias দিয়ে column বা table এর নাম বদলে দেওয়া যায় — শুধু result এ, আসল table এ না।
+
+### Column Alias
+
+```sql
+-- AS দিয়ে alias দাও
+SELECT
+    name AS employee_name,
+    salary AS monthly_salary,
+    dept_id AS department
+FROM employees;
+
+-- AS ছাড়াও হয় (কিন্তু AS লেখা ভালো অভ্যাস)
+SELECT name employee_name FROM employees;
+```
+
+### Function এর result এ Alias
+
+```sql
+SELECT
+    department,
+    COUNT(*) AS total_employees,
+    AVG(salary) AS avg_salary,
+    MAX(salary) AS highest_salary
+FROM employees
+GROUP BY department;
+```
+
+### Table Alias — Query ছোট করো
+
+```sql
+-- e = employees, d = departments
+SELECT e.name, e.salary, d.dept_name
+FROM employees e
+INNER JOIN departments d ON e.dept_id = d.id;
+```
+
+<Callout type="info" title="Alias কোথায় কোথায় কাজ করে?">
+  Column alias → `ORDER BY` তে কাজ করে, কিন্তু `WHERE` বা `HAVING` তে **কাজ করে না** (SQL এ SELECT পরে run হয়)।
+  Table alias → পুরো query তে কাজ করে।
+</Callout>
+
+---
+
+## Fixed Value Column — নিজে value বসিয়ে দাও
+
+কোনো calculation বা column ছাড়া সরাসরি একটা fixed value column হিসেবে দেখানো যায়।
+
+```sql
+-- সবার জন্য is_staff = 0 বসিয়ে দাও
+SELECT
+    name,
+    salary,
+    0 AS is_staff,
+    'active' AS status,
+    'BD' AS country_code
+FROM employees;
+```
+
+**Result:**
+
+| name | salary | is_staff | status | country_code |
+|---|---|---|---|---|
+| Rahim | 50000 | 0 | active | BD |
+| Karim | 60000 | 0 | active | BD |
+
+### কখন কাজে লাগে?
+
+```sql
+-- দুইটা table UNION করার সময় structure মেলাতে
+SELECT name, salary, 1 AS is_manager FROM managers
+UNION ALL
+SELECT name, salary, 0 AS is_manager FROM employees;
+
+-- Data migration বা export এর সময়
+SELECT
+    id,
+    name,
+    email,
+    'imported' AS source,
+    NOW() AS created_at
+FROM old_users;
+```
+
+---
+
+## CASE WHEN THEN END — Conditional Logic
+
+SQL এর `if-else` হলো `CASE WHEN`।
+
+### Basic Syntax
+
+```sql
+CASE
+    WHEN condition1 THEN result1
+    WHEN condition2 THEN result2
+    WHEN condition3 THEN result3
+    ELSE default_result
+END
+```
+
+<Callout type="warn" title="END লিখতে ভুলো না">
+  CASE শেষ করতে অবশ্যই `END` লিখতে হবে। না লিখলে syntax error।
+</Callout>
+
+### উদাহরণ — Salary Level
+
+```sql
+SELECT
+    name,
+    salary,
+    CASE
+        WHEN salary < 30000 THEN 'Junior'
+        WHEN salary BETWEEN 30000 AND 60000 THEN 'Mid-level'
+        WHEN salary > 60000 THEN 'Senior'
+        ELSE 'Unknown'
+    END AS level
+FROM employees;
+```
+
+**Result:**
+
+| name | salary | level |
+|---|---|---|
+| Rahim | 25000 | Junior |
+| Karim | 45000 | Mid-level |
+| Sadia | 75000 | Senior |
+
+---
+
+### CASE এর ধরন
+
+<Tabs items={['Searched CASE', 'Simple CASE']}>
+  <Tab value="Searched CASE">
+    ```sql
+    -- Condition দিয়ে check করো (সবচেয়ে বেশি ব্যবহার)
+    SELECT name,
+      CASE
+        WHEN score >= 90 THEN 'A+'
+        WHEN score >= 80 THEN 'A'
+        WHEN score >= 70 THEN 'B'
+        WHEN score >= 60 THEN 'C'
+        ELSE 'F'
+      END AS grade
+    FROM students;
+    ```
+  </Tab>
+  <Tab value="Simple CASE">
+    ```sql
+    -- একটা column এর exact value match করো
+    SELECT name,
+      CASE department
+        WHEN 'HR' THEN 'Human Resources'
+        WHEN 'IT' THEN 'Information Technology'
+        WHEN 'FIN' THEN 'Finance'
+        ELSE department
+      END AS dept_full_name
+    FROM employees;
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+### CASE এর ভেতরে CASE (Nested)
+
+```sql
+SELECT name, salary,
+    CASE
+        WHEN department = 'Engineering' THEN
+            CASE
+                WHEN salary > 80000 THEN 'Senior Engineer'
+                ELSE 'Engineer'
+            END
+        WHEN department = 'HR' THEN 'HR Staff'
+        ELSE 'Other'
+    END AS role
+FROM employees;
+```
+
+---
+
+### CASE + GROUP BY + COUNT
+
+```sql
+-- কতজন Junior, Mid-level, Senior আছে
+SELECT
+    CASE
+        WHEN salary < 30000 THEN 'Junior'
+        WHEN salary BETWEEN 30000 AND 60000 THEN 'Mid-level'
+        ELSE 'Senior'
+    END AS level,
+    COUNT(*) AS total
+FROM employees
+GROUP BY
+    CASE
+        WHEN salary < 30000 THEN 'Junior'
+        WHEN salary BETWEEN 30000 AND 60000 THEN 'Mid-level'
+        ELSE 'Senior'
+    END;
+```
+
+---
+
+### CASE + SUM — Pivot এর মতো
+
+```sql
+-- Department অনুযায়ী salary total করো, column হিসেবে
+SELECT
+    SUM(CASE WHEN department = 'HR' THEN salary ELSE 0 END) AS hr_total,
+    SUM(CASE WHEN department = 'IT' THEN salary ELSE 0 END) AS it_total,
+    SUM(CASE WHEN department = 'Finance' THEN salary ELSE 0 END) AS fin_total
+FROM employees;
+```
+
+---
+
+## তিনটা জিনিস একসাথে
+
+```sql
+SELECT
+    e.name AS employee_name,          -- alias
+    e.salary,
+    d.dept_name,
+    0 AS is_contractor,               -- fixed value
+    CASE                              -- CASE WHEN
+        WHEN e.salary > 70000 THEN 'High'
+        WHEN e.salary > 40000 THEN 'Medium'
+        ELSE 'Low'
+    END AS salary_band
+FROM employees e
+INNER JOIN departments d ON e.dept_id = d.id
+ORDER BY e.salary DESC;
+```
