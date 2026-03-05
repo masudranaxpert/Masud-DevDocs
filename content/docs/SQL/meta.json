@@ -1,6 +1,6 @@
 {
   "title": "SQL Learn",
-  "defaultOpen": true,
+  "defaultOpen": false,
   "pages": [
     "basics",
     "joins",
