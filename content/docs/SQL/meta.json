@@ -1,0 +1,15 @@
+{
+  "title": "SQL Learn",
+  "defaultOpen": true,
+  "pages": [
+    "basics",
+    "joins",
+    "select",
+    "stringfunctions",
+    "numericfunctions",
+    "datefunctions",
+    "advancedfunctions",
+    "sql-window-functions",
+    "Subquery "
+  ]
+}
