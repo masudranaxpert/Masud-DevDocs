@@ -1,0 +1,157 @@
+---
+title: Static Media
+description: Django Static Files ও Media — setup, WhiteNoise, S3, common mistakes
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Static vs Media
+
+| | Static Files | Media Files |
+|---|---|---|
+| কী | CSS, JS, Images (developer দেওয়া) | User uploaded files |
+| Settings | `STATICFILES_DIRS`, `STATIC_ROOT` | `MEDIA_ROOT` |
+| URL | `STATIC_URL` | `MEDIA_URL` |
+| Dev serve | Automatic | `urls.py` তে add করো |
+| Prod serve | Nginx / WhiteNoise / CDN | Nginx / S3 |
+
+---
+
+## Settings
+
+```python
+# base.py
+STATIC_URL  = '/static/'
+MEDIA_URL   = '/media/'
+MEDIA_ROOT  = BASE_DIR / 'media'
+
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',   # project level static folder
+]
+
+# production.py
+STATIC_ROOT = BASE_DIR / 'staticfiles'   # collectstatic এখানে collect করে
+```
+
+---
+
+## Development তে Media Serve
+
+```python
+# config/urls.py
+from django.conf import settings
+from django.conf.urls.static import static
+
+urlpatterns = [
+    # ...
+]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+```
+
+---
+
+## Template তে Static ব্যবহার
+
+```html
+{% load static %}
+
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+<script src="{% static 'js/app.js' %}"></script>
+<img src="{% static 'images/logo.png' %}" alt="Logo">
+
+{# Media file (user uploaded) #}
+{% if product.image %}
+    <img src="{{ product.image.url }}" alt="{{ product.name }}">
+{% endif %}
+```
+
+---
+
+## Production — WhiteNoise (Easiest)
+
+```bash
+pip install whitenoise
+```
+
+```python
+# settings/production.py
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',   # ← SecurityMiddleware এর পরেই
+    # ...
+]
+
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+```
+
+```bash
+python manage.py collectstatic
+```
+
+---
+
+## Production — AWS S3
+
+```bash
+pip install django-storages boto3
+```
+
+```python
+# settings/production.py
+INSTALLED_APPS += ['storages']
+
+AWS_ACCESS_KEY_ID     = env('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME')
+AWS_S3_REGION_NAME    = 'ap-southeast-1'
+AWS_S3_CUSTOM_DOMAIN  = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+
+# Static files
+STATICFILES_STORAGE = 'storages.backends.s3boto3.S3StaticStorage'
+STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/static/'
+
+# Media files
+DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
+```
+
+---
+
+## ImageField ব্যবহার
+
+```python
+# models.py
+class Product(models.Model):
+    image = models.ImageField(
+        upload_to='products/%Y/%m/',   # ← year/month subfolder
+        blank=True,
+        null=True
+    )
+
+# ✅ upload_to function দিয়ে custom path
+def product_image_path(instance, filename):
+    ext = filename.split('.')[-1]
+    return f'products/{instance.slug}/main.{ext}'
+
+image = models.ImageField(upload_to=product_image_path, blank=True, null=True)
+```
+
+---
+
+## Common Mistakes
+
+<Callout title="Static/Media ভুলগুলো">
+  - Production এ `DEBUG=True` রেখে static serve করার চেষ্টা — static serve হবে না
+  - `collectstatic` না চালানো → production এ CSS/JS পাওয়া যাবে না
+  - Media files এর জন্য `urls.py` তে static() না দেওয়া → uploaded image দেখা যাবে না
+  - `MEDIA_ROOT` এ user uploaded file এর বদলে source code রাখা → git এ committed হবে
+  - `Pillow` install না করা ImageField এর জন্য → `ImportError`
+</Callout>
+
+```bash
+# ImageField use করলে Pillow লাগবে
+pip install Pillow
+```

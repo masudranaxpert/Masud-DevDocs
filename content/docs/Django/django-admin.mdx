@@ -1,0 +1,163 @@
+---
+title: Admin
+description: Django Admin — customization, list_display, actions, inline, best practices
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Basic Admin Registration
+
+```python
+# apps/products/admin.py
+from django.contrib import admin
+from .models import Product, Category
+
+@admin.register(Product)
+class ProductAdmin(admin.ModelAdmin):
+    # List page
+    list_display  = ['name', 'price', 'category', 'is_active', 'created_at']
+    list_filter   = ['is_active', 'category', 'created_at']
+    search_fields = ['name', 'description']
+    list_editable = ['is_active']               # list থেকেই edit
+    ordering      = ['-created_at']
+    date_hierarchy = 'created_at'
+
+    # Detail page
+    prepopulated_fields = {'slug': ('name',)}   # name থেকে slug auto-fill
+    readonly_fields     = ['created_at', 'updated_at']
+
+    fieldsets = [
+        ('Basic Info', {
+            'fields': ['name', 'slug', 'description', 'category']
+        }),
+        ('Pricing', {
+            'fields': ['price', 'discount_price'],
+        }),
+        ('Status', {
+            'fields': ['is_active', 'is_featured'],
+            'classes': ['collapse'],   # collapsible
+        }),
+        ('Timestamps', {
+            'fields': ['created_at', 'updated_at'],
+            'classes': ['collapse'],
+        }),
+    ]
+
+    # ✅ N+1 avoid করো admin list তেও
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('category')
+```
+
+---
+
+## list_display এ Custom Column
+
+```python
+@admin.register(Product)
+class ProductAdmin(admin.ModelAdmin):
+    list_display = ['name', 'price_display', 'status_badge']
+
+    @admin.display(description='Price', ordering='price')
+    def price_display(self, obj):
+        return f'৳{obj.price:,.2f}'
+
+    @admin.display(description='Status')
+    def status_badge(self, obj):
+        from django.utils.html import format_html
+        color = 'green' if obj.is_active else 'red'
+        text  = 'Active' if obj.is_active else 'Inactive'
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color, text
+        )
+```
+
+---
+
+## Custom Admin Action
+
+```python
+@admin.register(Product)
+class ProductAdmin(admin.ModelAdmin):
+    actions = ['activate_products', 'deactivate_products']
+
+    @admin.action(description='Activate selected products')
+    def activate_products(self, request, queryset):
+        updated = queryset.update(is_active=True)
+        self.message_user(request, f'{updated} products activated.')
+
+    @admin.action(description='Deactivate selected products')
+    def deactivate_products(self, request, queryset):
+        updated = queryset.update(is_active=False)
+        self.message_user(request, f'{updated} products deactivated.', level='warning')
+```
+
+---
+
+## Inline Admin — Related Objects একসাথে
+
+```python
+class OrderItemInline(admin.TabularInline):  # অথবা StackedInline
+    model = OrderItem
+    fields = ['product', 'quantity', 'price']
+    extra = 0   # extra empty forms দেখাবে না
+    readonly_fields = ['price']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('product')
+
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    list_display = ['id', 'user', 'total', 'status', 'created_at']
+    inlines      = [OrderItemInline]
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('user').annotate(
+            total=Sum(F('items__price') * F('items__quantity'))
+        )
+
+    @admin.display(description='Total')
+    def total(self, obj):
+        return f'৳{obj.total or 0:,.2f}'
+```
+
+---
+
+## Admin URL Rename (Security)
+
+```python
+# config/urls.py
+urlpatterns = [
+    path('secret-panel-2024/', admin.site.urls),  # ← /admin/ rename করো
+    # ...
+]
+```
+
+---
+
+## Admin Customization
+
+```python
+# config/settings/base.py
+admin.site.site_header  = 'My Shop Admin'
+admin.site.site_title   = 'My Shop'
+admin.site.index_title  = 'Dashboard'
+```
+
+---
+
+## Common Admin Mistakes
+
+<Callout title="Admin এ ভুলগুলো">
+  - `get_queryset` এ `select_related` না দেওয়া → list page এ N+1
+  - `list_display` এ related field সরাসরি দেওয়া → N+1 অনেক queries
+  - Admin তে sensitive data দেখানো → `readonly_fields` দিয়ে protect করো
+  - `raw_id_fields` না দেওয়া large table এ → dropdown এ হাজার হাজার items load হবে
+</Callout>
+
+```python
+# Large ForeignKey তে raw_id_fields ব্যবহার করো
+class OrderAdmin(admin.ModelAdmin):
+    raw_id_fields = ['user', 'product']   # dropdown এর বদলে ID field
+```

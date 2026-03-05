@@ -1,0 +1,221 @@
+---
+title: Models
+description: Django Models — fields, blank vs null, choices, abstract model, index, managers
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Basic Structure
+
+```python
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+
+class Product(models.Model):
+    name        = models.CharField(max_length=200)
+    slug        = models.SlugField(unique=True)
+    description = models.TextField(blank=True)
+    price       = models.DecimalField(max_digits=10, decimal_places=2)
+    is_active   = models.BooleanField(default=True)
+    created_at  = models.DateTimeField(auto_now_add=True)
+    updated_at  = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = _('Product')
+        verbose_name_plural = _('Products')
+        indexes = [
+            models.Index(fields=['slug']),
+            models.Index(fields=['is_active', 'created_at']),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        from django.urls import reverse
+        return reverse('products:detail', kwargs={'slug': self.slug})
+```
+
+---
+
+## Field Types
+
+<Tabs items={['Text', 'Number', 'Date', 'File', 'Relation']}>
+  <Tab value="Text">
+    ```python
+    name   = models.CharField(max_length=200)
+    slug   = models.SlugField(unique=True)
+    bio    = models.TextField(blank=True)
+    email  = models.EmailField(unique=True)
+    url    = models.URLField(blank=True)
+    uuid   = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    data   = models.JSONField(default=dict, blank=True)
+    ```
+  </Tab>
+  <Tab value="Number">
+    ```python
+    price    = models.DecimalField(max_digits=10, decimal_places=2)  # টাকা
+    quantity = models.PositiveIntegerField(default=0)
+    rating   = models.FloatField(default=0.0)
+    ```
+    <Callout type="warn" title="টাকায় FloatField না!">
+      `FloatField` এ floating point error হয়। সবসময় `DecimalField` ব্যবহার করো।
+    </Callout>
+  </Tab>
+  <Tab value="Date">
+    ```python
+    created_at   = models.DateTimeField(auto_now_add=True)  # create এ set, immutable
+    updated_at   = models.DateTimeField(auto_now=True)      # প্রতি save এ update
+    birth_date   = models.DateField()
+    published_at = models.DateTimeField(null=True, blank=True)
+    ```
+  </Tab>
+  <Tab value="File">
+    ```python
+    avatar   = models.ImageField(upload_to='avatars/%Y/%m/', blank=True, null=True)
+    document = models.FileField(upload_to='docs/', blank=True)
+    # settings.py:
+    # MEDIA_URL = '/media/'
+    # MEDIA_ROOT = BASE_DIR / 'media'
+    ```
+  </Tab>
+  <Tab value="Relation">
+    ```python
+    # ForeignKey (Many-to-One)
+    author = models.ForeignKey(
+        'users.User', on_delete=models.CASCADE, related_name='posts',
+    )
+    # OneToOne
+    profile = models.OneToOneField(
+        'users.User', on_delete=models.CASCADE, related_name='profile',
+    )
+    # ManyToMany
+    tags = models.ManyToManyField('Tag', blank=True)
+
+    # on_delete options:
+    # CASCADE    → parent মুছলে child ও মুছবে
+    # PROTECT    → parent মুছতে দেবে না (error)
+    # SET_NULL   → parent মুছলে NULL হবে (null=True দরকার)
+    # SET_DEFAULT → default value set হবে
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## blank vs null — সবচেয়ে বেশি ভুল
+
+| | `null=True` | `blank=True` |
+|---|---|---|
+| কী করে | Database NULL store | Form validation skip |
+| CharField তে | ❌ দরকার নেই | ✅ optional হলে |
+| DateField/FK তে | ✅ optional হলে | ✅ optional হলে |
+
+```python
+# ❌ ভুল — CharField এ null=True দিলে দুইটা empty state: "" এবং NULL
+name = models.CharField(max_length=100, null=True, blank=True)
+
+# ✅ সঠিক
+name = models.CharField(max_length=100, blank=True, default='')
+
+# ✅ সঠিক — DateField, FK তে null=True ঠিক আছে
+published_at = models.DateTimeField(null=True, blank=True)
+category = models.ForeignKey(Category, null=True, blank=True, on_delete=models.SET_NULL)
+```
+
+---
+
+## Choices — TextChoices
+
+```python
+# ❌ পুরনো — magic strings ছড়িয়ে পড়ে
+STATUS_CHOICES = [('draft', 'Draft'), ('published', 'Published')]
+
+# ✅ TextChoices (Django 3.0+)
+class Post(models.Model):
+    class Status(models.TextChoices):
+        DRAFT     = 'draft',     'Draft'
+        PUBLISHED = 'published', 'Published'
+        ARCHIVED  = 'archived',  'Archived'
+
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.DRAFT,
+    )
+
+# ব্যবহার
+post.status = Post.Status.PUBLISHED
+post.get_status_display()     # → 'Published'
+Post.objects.filter(status=Post.Status.PUBLISHED)
+```
+
+---
+
+## Abstract Base Model
+
+```python
+class TimeStampedModel(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True   # ← এটা না দিলে আলাদা table হবে!
+
+class Product(TimeStampedModel):
+    name = models.CharField(max_length=200)
+    # created_at, updated_at automatically আছে
+```
+
+---
+
+## Custom Manager
+
+```python
+class PublishedManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(status='published')
+
+class Post(models.Model):
+    objects   = models.Manager()      # সব posts
+    published = PublishedManager()    # শুধু published
+
+Post.published.all()
+Post.published.filter(author=user)
+```
+
+---
+
+## @property vs annotate
+
+```python
+class Order(models.Model):
+    price    = models.DecimalField(max_digits=10, decimal_places=2)
+    quantity = models.PositiveIntegerField()
+
+    @property
+    def total(self):
+        return self.price * self.quantity
+
+# ❌ filter করা যায় না
+Order.objects.filter(total__gt=1000)   # error!
+
+# ✅ annotate দিয়ে filter করো
+Order.objects.annotate(total=F('price') * F('quantity')).filter(total__gt=1000)
+```
+
+---
+
+## Index কোথায় দেবে
+
+```python
+class Meta:
+    indexes = [
+        models.Index(fields=['slug']),                      # unique lookup
+        models.Index(fields=['email']),                     # frequent filter
+        models.Index(fields=['status', 'created_at']),      # composite filter
+        models.Index(fields=['-created_at']),               # frequent ORDER BY
+    ]
+```
+
+`unique=True` field এ automatically index আছে। বেশি index মানে write slow — দরকার মতো দাও।

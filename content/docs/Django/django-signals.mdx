@@ -1,0 +1,172 @@
+---
+title: Signals
+description: Django Signals — post_save, pre_delete, custom signals, ভুল এবং alternatives
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Built-in Signals
+
+```python
+# Model signals
+from django.db.models.signals import (
+    pre_save,    # save() এর আগে
+    post_save,   # save() এর পরে
+    pre_delete,  # delete() এর আগে
+    post_delete, # delete() এর পরে
+    m2m_changed, # ManyToMany পরিবর্তন হলে
+)
+
+# Request signals
+from django.core.signals import request_started, request_finished
+
+# Auth signals
+from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
+```
+
+---
+
+## post_save — User তৈরি হলে Profile বানাও
+
+```python
+# apps/users/signals.py
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.contrib.auth import get_user_model
+from .models import Profile
+
+User = get_user_model()
+
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    """User তৈরি হলে automatically Profile তৈরি করো"""
+    if created:
+        Profile.objects.create(user=instance)
+
+@receiver(post_save, sender=User)
+def save_user_profile(sender, instance, **kwargs):
+    """User save হলে Profile ও save করো"""
+    if hasattr(instance, 'profile'):
+        instance.profile.save()
+```
+
+Signal connect করো `apps.py` তে:
+```python
+# apps/users/apps.py
+class UsersConfig(AppConfig):
+    name = 'apps.users'
+
+    def ready(self):
+        import apps.users.signals   # ← এখানে import করো, __init__.py তে না
+```
+
+---
+
+## pre_delete — Delete এর আগে কাজ করো
+
+```python
+@receiver(pre_delete, sender=Product)
+def cleanup_product_files(sender, instance, **kwargs):
+    """Product delete হওয়ার আগে related files মুছো"""
+    if instance.image:
+        import os
+        if os.path.exists(instance.image.path):
+            os.remove(instance.image.path)
+
+@receiver(pre_delete, sender=Order)
+def prevent_paid_order_deletion(sender, instance, **kwargs):
+    """Paid order delete হতে দেবে না"""
+    if instance.status == 'paid':
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied("Cannot delete a paid order.")
+```
+
+---
+
+## Custom Signal
+
+```python
+# apps/orders/signals.py
+from django.dispatch import Signal
+
+# Custom signal define করো
+order_completed = Signal()
+payment_received = Signal()
+
+# Signal পাঠাও
+def complete_order(order):
+    order.status = 'completed'
+    order.save()
+    # Signal পাঠাও — receiver গুলো চলবে
+    order_completed.send(sender=order.__class__, order=order)
+
+# Signal receive করো
+@receiver(order_completed)
+def send_completion_email(sender, order, **kwargs):
+    from django.core.mail import send_mail
+    send_mail(
+        'Order Completed',
+        f'Your order #{order.id} is complete.',
+        'noreply@mysite.com',
+        [order.user.email],
+    )
+
+@receiver(order_completed)
+def update_inventory(sender, order, **kwargs):
+    for item in order.items.all():
+        item.product.stock -= item.quantity
+        item.product.save()
+```
+
+---
+
+## m2m_changed Signal
+
+```python
+from django.db.models.signals import m2m_changed
+
+@receiver(m2m_changed, sender=Post.tags.through)
+def post_tags_changed(sender, instance, action, pk_set, **kwargs):
+    if action == 'post_add':
+        # Tag যোগ হলে
+        print(f"Tags added to post: {pk_set}")
+    elif action == 'post_remove':
+        # Tag সরানো হলে
+        print(f"Tags removed from post: {pk_set}")
+```
+
+---
+
+## Signals এর সমস্যা ও Alternatives
+
+<Callout type="warn" title="Signal কখন avoid করবে?">
+  Signal debugging কঠিন — কোথা থেকে কোথায় কী হচ্ছে বোঝা যায় না।
+  Complex business logic signal এ না রেখে explicit method বা Service layer এ রাখো।
+</Callout>
+
+```python
+# ❌ Signal এ complex logic
+@receiver(post_save, sender=Order)
+def order_saved(sender, instance, created, **kwargs):
+    if instance.status == 'completed':
+        send_email()
+        update_inventory()
+        create_invoice()
+        notify_warehouse()
+        # কোনটা fail করলে কী হবে? Transaction নেই!
+
+# ✅ Explicit method — পরিষ্কার, testable, transactional
+from django.db import transaction
+
+class Order(models.Model):
+    def complete(self):
+        with transaction.atomic():
+            self.status = 'completed'
+            self.save()
+            send_completion_email(self)
+            update_inventory(self)
+            create_invoice(self)
+            notify_warehouse(self)
+```
+
+Signal ব্যবহার করো শুধু **simple, decoupled side-effects** এর জন্য — যেমন Profile auto-create।

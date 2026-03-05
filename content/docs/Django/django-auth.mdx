@@ -1,0 +1,178 @@
+---
+title: Auth
+description: Django Auth — Login, Registration, Permissions, password hashing, সব ভুল
+---
+
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Settings
+
+```python
+LOGIN_URL = '/auth/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/auth/login/'
+
+AUTH_PASSWORD_VALIDATORS = [
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+     'OPTIONS': {'min_length': 8}},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+]
+```
+
+---
+
+## Registration
+
+```python
+# apps/users/forms.py
+from django import forms
+from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+
+User = get_user_model()
+
+class RegistrationForm(forms.ModelForm):
+    password1 = forms.CharField(widget=forms.PasswordInput)
+    password2 = forms.CharField(widget=forms.PasswordInput)
+
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'first_name', 'last_name']
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if User.objects.filter(email=email).exists():
+            raise forms.ValidationError('This email is already registered.')
+        return email
+
+    def clean_password1(self):
+        password = self.cleaned_data.get('password1')
+        validate_password(password)   # ← Django built-in validation
+        return password
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data.get('password1') != cleaned_data.get('password2'):
+            raise forms.ValidationError('Passwords do not match.')
+        return cleaned_data
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.set_password(self.cleaned_data['password1'])  # ← hash করে save
+        if commit:
+            user.save()
+        return user
+```
+
+```python
+# apps/users/views.py
+def register(request):
+    if request.user.is_authenticated:
+        return redirect('/')
+
+    if request.method == 'POST':
+        form = RegistrationForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            login(request, user)   # ← register এর পরে auto login
+            messages.success(request, f'Welcome, {user.username}!')
+            return redirect('/')
+    else:
+        form = RegistrationForm()
+    return render(request, 'users/register.html', {'form': form})
+```
+
+---
+
+## Login — Built-in View
+
+```python
+# urls.py — Django built-in view ব্যবহার করা সবচেয়ে ভালো
+from django.contrib.auth import views as auth_views
+
+urlpatterns = [
+    path('login/', auth_views.LoginView.as_view(
+        template_name='users/login.html',
+        redirect_authenticated_user=True,
+    ), name='login'),
+    path('logout/', auth_views.LogoutView.as_view(), name='logout'),
+    path('password-change/', auth_views.PasswordChangeView.as_view(
+        template_name='users/password_change.html',
+        success_url='/auth/login/',
+    ), name='password_change'),
+]
+```
+
+Login template এ:
+```html
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Login</button>
+</form>
+<a href="{% url 'register' %}">Register</a>
+```
+
+---
+
+## Permission ও Authorization
+
+```python
+# View level
+@login_required
+def dashboard(request): ...
+
+@permission_required('products.add_product', raise_exception=True)
+def add_product(request): ...
+
+# Object level — নিজে check করো
+def edit_post(request, pk):
+    post = get_object_or_404(Post, pk=pk)
+    if post.author != request.user and not request.user.is_staff:
+        raise PermissionDenied   # 403
+
+# Template level
+{% if user.is_authenticated %}
+    <a href="{% url 'dashboard' %}">Dashboard</a>
+{% endif %}
+
+{% if user.has_perm('products.add_product') %}
+    <a href="{% url 'products:create' %}">Add Product</a>
+{% endif %}
+```
+
+---
+
+## Password Reset
+
+```python
+urlpatterns += [
+    path('password-reset/', auth_views.PasswordResetView.as_view(
+        template_name='users/password_reset.html',
+        email_template_name='users/emails/password_reset.txt',
+        success_url='/auth/password-reset/done/',
+    ), name='password_reset'),
+    path('password-reset/done/', auth_views.PasswordResetDoneView.as_view(
+        template_name='users/password_reset_done.html',
+    ), name='password_reset_done'),
+    path('reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(
+        template_name='users/password_reset_confirm.html',
+        success_url='/auth/login/',
+    ), name='password_reset_confirm'),
+]
+```
+
+---
+
+## Auth এ সব ভুল
+
+<Callout type="warn" title="এই ভুলগুলো security breach ঘটায়">
+  - `user.password = raw_password` করা → `set_password()` ব্যবহার করো!
+  - `{% csrf_token %}` ভুলে যাওয়া → CSRF attack
+  - Object level permission check না করা → অন্যের data দেখা/edit করা যাবে
+  - `@login_required` ভুলে যাওয়া → anonymous user sensitive page access করবে
+  - Password plain text log করা → কখনো করো না
+</Callout>

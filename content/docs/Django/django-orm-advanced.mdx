@@ -1,0 +1,171 @@
+---
+title: ORM Advanced
+description: select_related, prefetch_related, Prefetch object, only(), F(), iterator()
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## select_related — ForeignKey / OneToOne
+
+SQL JOIN করে একটাই query তে সব আনে।
+
+```python
+# ❌ N+1 — 100 posts = 101 queries
+posts = Post.objects.all()
+for post in posts:
+    print(post.author.name)   # প্রতিটার জন্য query!
+
+# ✅ select_related — 1 query
+posts = Post.objects.select_related('author').all()
+for post in posts:
+    print(post.author.name)   # no extra query
+
+# Nested
+posts = Post.objects.select_related('author__profile').all()
+# Multiple
+posts = Post.objects.select_related('author', 'category').all()
+```
+
+---
+
+## prefetch_related — ManyToMany / Reverse FK
+
+আলাদা queries, Python এ join।
+
+```python
+# ❌ N+1
+for author in Author.objects.all():
+    for book in author.books.all():   # query!
+        print(book.title)
+
+# ✅ prefetch_related — 2 queries মোট
+for author in Author.objects.prefetch_related('books').all():
+    for book in author.books.all():   # no extra query
+        print(book.title)
+
+# Multiple prefetch
+posts = Post.objects.prefetch_related('tags', 'comments').all()
+
+# select_related + prefetch_related একসাথে
+posts = Post.objects.select_related('author').prefetch_related('tags').all()
+```
+
+---
+
+## Prefetch Object — Filter + Custom Attr
+
+```python
+from django.db.models import Prefetch
+
+posts = Post.objects.prefetch_related(
+    Prefetch(
+        'comments',
+        queryset=Comment.objects.filter(
+            is_approved=True
+        ).select_related('author').order_by('-created_at'),
+        to_attr='approved_comments'   # ← list হিসেবে পাবে
+    )
+)
+
+for post in posts:
+    for comment in post.approved_comments:   # list, not QuerySet
+        print(comment.author.name)
+
+# Multiple Prefetch
+orders = Order.objects.prefetch_related(
+    Prefetch('items', queryset=OrderItem.objects.select_related('product')),
+    Prefetch('payments', queryset=Payment.objects.filter(status='completed')),
+)
+```
+
+<Callout type="warn" title="to_attr দিলে .all() কাজ করে না">
+  `to_attr` দিলে সেটা list হয়। `post.approved_comments.all()` না — `post.approved_comments` এভাবে access করো।
+</Callout>
+
+---
+
+## Prefetch Cache Break হওয়া
+
+```python
+posts = Post.objects.prefetch_related('comments').all()
+
+for post in posts:
+    # ✅ cache ব্যবহার হয়
+    all_comments = post.comments.all()
+
+    # ❌ filter() দিলে cache break! নতুন query চলে!
+    recent = post.comments.filter(created_at__gte=last_week)
+```
+
+filter দরকার হলে Prefetch Object + `to_attr` ব্যবহার করো।
+
+---
+
+## only() ও defer()
+
+```python
+# শুধু দরকারি columns আনো
+posts = Post.objects.only('id', 'title', 'slug', 'created_at')
+
+# heavy column skip করো
+posts = Post.objects.defer('content', 'raw_html')
+```
+
+<Callout type="warn" title="only() তে missing field access করলে extra query!">
+  ```python
+  posts = Post.objects.only('title')
+  print(posts[0].content)   # ← extra query! content আনতে
+  ```
+  শুধু তখনই ব্যবহার করো যখন কোন field access হবে নিশ্চিত।
+</Callout>
+
+---
+
+## F() Expression
+
+```python
+from django.db.models import F
+
+# ❌ race condition risk
+product = Product.objects.get(pk=1)
+product.views = product.views + 1
+product.save()
+
+# ✅ atomic, একটাই query
+Product.objects.filter(pk=1).update(views=F('views') + 1)
+
+# Field compare
+Order.objects.filter(quantity__gt=F('product__stock'))
+
+# Annotate তে
+Order.objects.annotate(profit=F('sell_price') - F('buy_price'))
+```
+
+---
+
+## iterator() — Memory Save
+
+```python
+# ❌ 1 million objects memory তে load!
+for post in Post.objects.all():
+    process(post)
+
+# ✅ batch এ আনে, কম memory
+for post in Post.objects.all().iterator(chunk_size=2000):
+    process(post)
+```
+
+<Callout type="warn">
+  `iterator()` এ `prefetch_related()` কাজ করে না। Large export এ ব্যবহার করো শুধু।
+</Callout>
+
+---
+
+## Comparison Table
+
+| | select_related | prefetch_related |
+|---|---|---|
+| Relation type | ForeignKey, OneToOne | ManyToMany, Reverse FK |
+| SQL | JOIN | 2 queries + Python merge |
+| Filter করা যায়? | না সহজে | Prefetch() দিয়ে হ্যাঁ |
+| Memory | বেশি (JOIN বড়) | কম |

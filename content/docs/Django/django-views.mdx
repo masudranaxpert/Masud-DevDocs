@@ -1,0 +1,203 @@
+---
+title: Views
+description: Django Views — FBV, CBV, Generic views, decorators, mixins, best practices
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Function-based View (FBV)
+
+```python
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+
+def product_list(request):
+    # ✅ select_related দিয়ে N+1 avoid
+    products = Product.objects.filter(
+        is_active=True
+    ).select_related('category').order_by('-created_at')
+
+    return render(request, 'products/list.html', {'products': products})
+
+
+def product_detail(request, slug):
+    # ✅ get_object_or_404 — নিজে try/except লিখো না
+    product = get_object_or_404(
+        Product.objects.select_related('category', 'seller'),
+        slug=slug,
+        is_active=True
+    )
+    return render(request, 'products/detail.html', {'product': product})
+
+
+@login_required
+def product_create(request):
+    if request.method == 'POST':
+        form = ProductForm(request.POST, request.FILES)
+        if form.is_valid():
+            product = form.save(commit=False)
+            product.seller = request.user   # ← current user
+            product.save()
+            messages.success(request, 'Product created!')
+            return redirect('products:detail', slug=product.slug)
+    else:
+        form = ProductForm()
+    return render(request, 'products/form.html', {'form': form})
+```
+
+---
+
+## Class-based View (CBV)
+
+```python
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.urls import reverse_lazy
+
+class ProductListView(ListView):
+    model = Product
+    template_name = 'products/list.html'
+    context_object_name = 'products'
+    paginate_by = 20
+
+    def get_queryset(self):
+        # ✅ সবসময় get_queryset override করো
+        return Product.objects.filter(
+            is_active=True
+        ).select_related('category').order_by('-created_at')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['page_title'] = 'Products'   # extra context যোগ করো
+        return context
+
+
+class ProductCreateView(LoginRequiredMixin, CreateView):
+    model = Product
+    form_class = ProductForm
+    template_name = 'products/form.html'
+    success_url = reverse_lazy('products:list')
+
+    def form_valid(self, form):
+        form.instance.seller = self.request.user   # ← user set
+        return super().form_valid(form)
+
+
+class ProductDeleteView(LoginRequiredMixin, DeleteView):
+    model = Product
+    template_name = 'products/confirm_delete.html'
+    success_url = reverse_lazy('products:list')
+
+    def get_queryset(self):
+        # শুধু নিজের product delete করতে পারবে
+        return Product.objects.filter(seller=self.request.user)
+```
+
+---
+
+## Decorators vs Mixins
+
+<Tabs items={['FBV Decorators', 'CBV Mixins']}>
+  <Tab value="FBV Decorators">
+    ```python
+    from django.contrib.auth.decorators import login_required, permission_required
+    from django.views.decorators.http import require_POST, require_http_methods
+
+    @login_required
+    def dashboard(request): ...
+
+    @permission_required('products.add_product', raise_exception=True)
+    def add_product(request): ...
+
+    @require_POST   # শুধু POST method
+    def delete_product(request, pk): ...
+
+    @require_http_methods(['GET', 'POST'])
+    def product_form(request): ...
+    ```
+  </Tab>
+  <Tab value="CBV Mixins">
+    ```python
+    from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+
+    # ✅ Mixin সবসময় প্রথমে (MRO order)
+    class ProductCreateView(LoginRequiredMixin, CreateView):
+        login_url = '/auth/login/'
+        ...
+
+    class ProductAdminView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+        permission_required = 'products.change_product'
+        raise_exception = True   # 403, login redirect না
+        ...
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## get_object_or_404 — সবসময় ব্যবহার করো
+
+```python
+# ❌ verbose
+try:
+    product = Product.objects.get(slug=slug)
+except Product.DoesNotExist:
+    raise Http404
+
+# ✅ একলাইনে
+product = get_object_or_404(Product, slug=slug)
+product = get_object_or_404(Product, slug=slug, is_active=True)
+product = get_object_or_404(
+    Product.objects.select_related('category'),
+    slug=slug
+)
+```
+
+---
+
+## Pagination
+
+```python
+from django.core.paginator import Paginator
+
+def product_list(request):
+    products = Product.objects.filter(is_active=True)
+    paginator = Paginator(products, 20)
+    page_obj = paginator.get_page(request.GET.get('page', 1))
+    return render(request, 'products/list.html', {'page_obj': page_obj})
+```
+
+```html
+{% for product in page_obj %}
+    <div>{{ product.name }}</div>
+{% endfor %}
+
+{% if page_obj.has_previous %}
+    <a href="?page={{ page_obj.previous_page_number }}">Previous</a>
+{% endif %}
+Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+{% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}">Next</a>
+{% endif %}
+```
+
+---
+
+## HttpRequest এর গুরুত্বপূর্ণ Attributes
+
+```python
+def my_view(request):
+    request.user          # current user (AnonymousUser হতে পারে)
+    request.method        # 'GET', 'POST', 'PUT', 'DELETE', ...
+    request.GET           # GET params dict
+    request.POST          # POST data dict
+    request.FILES         # uploaded files
+    request.path          # '/products/my-product/'
+    request.session       # session dict
+    request.COOKIES       # cookies dict
+    request.META          # HTTP headers
+    request.headers       # HTTP headers (clean interface)
+    request.is_secure()   # HTTPS কিনা
+```

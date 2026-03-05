@@ -1,0 +1,139 @@
+---
+title: Forms
+description: Django Forms — ModelForm, validation, widgets, formsets, সব ভুল
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## ModelForm — Best Practice
+
+```python
+from django import forms
+from .models import Product
+
+class ProductForm(forms.ModelForm):
+    class Meta:
+        model = Product
+        fields = ['name', 'description', 'price', 'category', 'image']
+
+        widgets = {
+            'description': forms.Textarea(attrs={'rows': 5, 'class': 'form-control'}),
+            'price': forms.NumberInput(attrs={'min': '0', 'step': '0.01'}),
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+
+        labels = {'price': 'Price (BDT)'}
+        help_texts = {'price': 'Enter price in Bangladeshi Taka'}
+
+        error_messages = {
+            'name': {'required': 'Product name is required.'},
+        }
+```
+
+---
+
+## Validation
+
+```python
+class ProductForm(forms.ModelForm):
+    class Meta:
+        model = Product
+        fields = ['name', 'price', 'discount_price']
+
+    # Single field validation
+    def clean_price(self):
+        price = self.cleaned_data.get('price')
+        if price <= 0:
+            raise forms.ValidationError('Price must be greater than 0.')
+        return price
+
+    def clean_name(self):
+        name = self.cleaned_data.get('name')
+        # Edit করার সময় নিজেকে exclude করো
+        qs = Product.objects.filter(name=name).exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError('This name is already taken.')
+        return name.strip()   # ← strip করো সবসময়
+
+    # Multiple field validation
+    def clean(self):
+        cleaned_data = super().clean()
+        price = cleaned_data.get('price')
+        discount = cleaned_data.get('discount_price')
+        if price and discount and discount >= price:
+            raise forms.ValidationError('Discount must be less than price.')
+        return cleaned_data
+```
+
+---
+
+## View তে Form Handle
+
+```python
+@login_required
+def product_create(request):
+    if request.method == 'POST':
+        form = ProductForm(request.POST, request.FILES)  # ← FILES দিতেই হবে
+        if form.is_valid():
+            product = form.save(commit=False)   # DB তে save না এখনো
+            product.seller = request.user
+            product.save()
+            form.save_m2m()   # ← commit=False হলে ManyToMany এভাবে save করো
+            messages.success(request, 'Created!')
+            return redirect('products:detail', slug=product.slug)
+    else:
+        form = ProductForm()
+    return render(request, 'products/form.html', {'form': form})
+
+
+def product_edit(request, slug):
+    product = get_object_or_404(Product, slug=slug)
+    if request.method == 'POST':
+        form = ProductForm(request.POST, request.FILES, instance=product)  # ← instance দাও
+        if form.is_valid():
+            form.save()
+            return redirect('products:detail', slug=product.slug)
+    else:
+        form = ProductForm(instance=product)   # ← existing data দিয়ে populate
+    return render(request, 'products/form.html', {'form': form, 'product': product})
+```
+
+---
+
+## Template তে Form
+
+```html
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    {{ form.as_p }}   {# quick render #}
+
+    {# অথবা manually #}
+    <div>
+        {{ form.name.label_tag }}
+        {{ form.name }}
+        {% if form.name.errors %}
+            <ul class="errors">{{ form.name.errors }}</ul>
+        {% endif %}
+    </div>
+
+    {% if form.non_field_errors %}
+        <div class="non-field-errors">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <button type="submit">Save</button>
+</form>
+```
+
+---
+
+## Common Mistakes
+
+<Callout title="Form এ সব ভুল যা beginners করে">
+  - `request.FILES` না দেওয়া file upload এ → file save হবে না
+  - `enctype="multipart/form-data"` না দেওয়া → file upload কাজ করবে না
+  - `commit=False` এর পরে `save_m2m()` না করা → ManyToMany data হারিয়ে যাবে
+  - Edit view এ `instance` না দেওয়া → নতুন object তৈরি হবে, update না
+  - `cleaned_data` এর বদলে `data` access করা → raw, unvalidated data
+  - `{% csrf_token %}` ভুলে যাওয়া → 403 Forbidden
+</Callout>
