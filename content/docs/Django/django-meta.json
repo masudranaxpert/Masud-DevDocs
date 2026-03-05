@@ -1,0 +1,32 @@
+{
+  "title": "Django 6",
+  "description": "Django 6 complete documentation — setup থেকে production পর্যন্ত",
+  "root": true,
+  "pages": [
+    "index",
+    "setup",
+    "models",
+    "migrations",
+    "---",
+    "orm-basics",
+    "orm-advanced",
+    "orm-mistakes",
+    "---",
+    "views",
+    "urls",
+    "templates",
+    "forms",
+    "auth",
+    "---",
+    "middleware",
+    "signals",
+    "admin",
+    "static-media",
+    "settings",
+    "---",
+    "security",
+    "testing",
+    "background-tasks",
+    "deployment"
+  ]
+}
