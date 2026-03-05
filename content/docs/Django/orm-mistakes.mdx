@@ -1,0 +1,194 @@
+---
+title: ORM Mistakes
+description: ❌ Django ORM এ সবচেয়ে বেশি ভুল — N+1, bulk, update, delete, count
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+<Callout type="warn" title="এই page টা সবচেয়ে গুরুত্বপূর্ণ">
+  Django performance এর ৯০% সমস্যা ORM ভুল ব্যবহার থেকে। Production crash এড়াতে এগুলো মুখস্থ করো।
+</Callout>
+
+---
+
+## ❌ ভুল ১: N+1 — View তে
+
+```python
+# ❌ 100 posts = 101 queries!
+posts = Post.objects.all()
+for post in posts:
+    print(post.author.name)   # প্রতিটার জন্য query!
+
+# ✅ 1 query
+posts = Post.objects.select_related('author').all()
+```
+
+## ❌ ভুল ২: N+1 — Template এ (সবচেয়ে বিপজ্জনক)
+
+```html
+<!-- ❌ দেখতে innocent, কিন্তু N+1! -->
+{% for post in posts %}
+    {{ post.author.name }}    {# query! #}
+    {{ post.category.name }}  {# query! #}
+{% endfor %}
+
+<!-- ✅ view এ select_related দিয়ে পাঠাও -->
+<!-- posts = Post.objects.select_related('author', 'category') -->
+```
+
+## ❌ ভুল ৩: Loop এ .save() বা .create()
+
+```python
+# ❌ 1000 objects = 1000 queries!
+for i in range(1000):
+    Product.objects.create(name=f'Product {i}', price=100)
+
+# ✅ bulk_create — 1-2 queries
+products = [Product(name=f'Product {i}', price=100) for i in range(1000)]
+Product.objects.bulk_create(products, batch_size=500)
+```
+
+```python
+# ❌ loop এ save
+for p in Product.objects.filter(category='sale'):
+    p.price = p.price * 0.9
+    p.save()   # প্রতিটার জন্য query!
+
+# ✅ bulk_update
+products = list(Product.objects.filter(category='sale'))
+for p in products:
+    p.price = p.price * 0.9
+Product.objects.bulk_update(products, ['price'], batch_size=500)
+
+# ✅ আরো ভালো — সরাসরি update()
+Product.objects.filter(category='sale').update(price=F('price') * 0.9)
+```
+
+## ❌ ভুল ৪: update() এর limitation না জানা
+
+```python
+# update() এ save() signal চলে না, auto_now update হয় না, clean() চলে না
+Post.objects.filter(status='draft').update(status='published')
+# → post_save signal চলবে না!
+
+# Signal দরকার হলে loop + save() করতে হবে
+for post in Post.objects.filter(status='draft'):
+    post.publish()   # custom method যেখানে logic আছে
+```
+
+## ❌ ভুল ৫: len() বনাম count()
+
+```python
+# ❌ সব objects load করে তারপর count করে!
+posts = Post.objects.all()
+count = len(posts)
+
+# ✅ SQL COUNT(*), data load করে না
+count = Post.objects.count()
+count = Post.objects.filter(status='published').count()
+```
+
+## ❌ ভুল ৬: count() বনাম exists()
+
+```python
+# ❌ ধীর
+if Post.objects.filter(status='published'):         # সব objects load!
+if Post.objects.filter(status='published').count() > 0:  # COUNT(*) চলে
+
+# ✅ দ্রুত — LIMIT 1 চলে
+if Post.objects.filter(status='published').exists():
+```
+
+## ❌ ভুল ৭: Same QuerySet বারবার Evaluate
+
+```python
+# ❌ দুইবার database hit!
+posts = Post.objects.filter(status='published')
+count = posts.count()     # Query 1
+for post in posts:         # Query 2
+    ...
+
+# ✅ একবার evaluate করো
+posts = list(Post.objects.filter(status='published'))
+count = len(posts)         # no query
+for post in posts:         # no query
+    ...
+```
+
+## ❌ ভুল ৮: Python Calculation বনাম Annotation
+
+```python
+# ❌ N+1
+for author in Author.objects.all():
+    total = author.posts.count()   # প্রতিটার জন্য query!
+
+# ✅ একটাই query
+for author in Author.objects.annotate(post_count=Count('posts')):
+    total = author.post_count  # no extra query
+```
+
+## ❌ ভুল ৯: delete() এ Cascade Signal না চলা
+
+```python
+# CASCADE এ parent delete করলে child ও delete হয়
+# কিন্তু child এর delete signal চলে না!
+Category.objects.filter(is_active=False).delete()
+# → related products ও delete হবে
+# → products এর post_delete signal চলবে না!
+
+# Signal দরকার হলে:
+for category in Category.objects.filter(is_active=False):
+    for product in category.products.all():
+        product.delete()   # signal চলবে
+    category.delete()
+```
+
+## ❌ ভুল ১০: get() এ Exception Handle না করা
+
+```python
+# ❌ DoesNotExist exception crash করাবে
+post = Post.objects.get(slug=slug)
+
+# ✅ get_object_or_404 (view এ)
+from django.shortcuts import get_object_or_404
+post = get_object_or_404(Post, slug=slug)
+
+# ✅ অথবা first() (কোথাও কোথাও)
+post = Post.objects.filter(slug=slug).first()
+if not post:
+    ...
+```
+
+---
+
+## Debug করো
+
+```python
+# QuerySet এর SQL দেখো
+print(Post.objects.select_related('author').filter(status='published').query)
+
+# কতটা query চলেছে
+from django.db import connection, reset_queries
+reset_queries()
+list(Post.objects.all())
+print(len(connection.queries))
+```
+
+`debug-toolbar` install করো — browser এ queries দেখা যাবে।
+
+---
+
+## Quick Checklist
+
+<Callout title="View বা Template লেখার আগে এই check করো">
+  - ForeignKey/OneToOne access? → `select_related()`
+  - ManyToMany / reverse FK access? → `prefetch_related()`
+  - Loop এ `.count()`? → `annotate(Count(...))`
+  - Loop এ `.save()`? → `bulk_create()` বা `bulk_update()`
+  - Simple update? → `queryset.update()`
+  - `len(queryset)`? → `.count()`
+  - `if queryset:`? → `.exists()`
+  - সব column দরকার নেই? → `only()` বা `values()`
+</Callout>
+
+

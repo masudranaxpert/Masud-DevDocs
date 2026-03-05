@@ -1,0 +1,225 @@
+---
+title: Templates
+description: Django Templates — Django 6 Partials, tags, filters, context processors, ভুল
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Base Template
+
+`templates/base.html`:
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}My Site{% endblock %}</title>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% include 'components/navbar.html' %}
+
+    <main>
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    {% include 'components/footer.html' %}
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
+```
+
+Child template:
+```html
+{% extends 'base.html' %}
+
+{% block title %}Products — My Site{% endblock %}
+
+{% block content %}
+    <h1>Products</h1>
+    {% for product in products %}
+        <p>{{ product.name }}</p>
+    {% endfor %}
+{% endblock %}
+```
+
+---
+
+## Django 6 নতুন — Template Partials
+
+```html
+<!-- templates/products/list.html -->
+{% load partials %}
+
+{% partialdef product-card %}
+<div class="product-card">
+    <h3>{{ product.name }}</h3>
+    <p>৳{{ product.price }}</p>
+    <a href="{% url 'products:detail' slug=product.slug %}">View</a>
+</div>
+{% endpartialdef %}
+
+{% for product in products %}
+    {% partial product-card %}
+{% endfor %}
+```
+
+অন্য template থেকে use করো:
+```html
+{% include 'products/list.html#product-card' with product=product %}
+```
+
+<Callout type="info" title="Partials কেন ভালো?">
+  আগে small component এর জন্য আলাদা file লাগতো। এখন একই file এ define করে `#name` দিয়ে reuse করা যায়।
+</Callout>
+
+---
+
+## Template Tags
+
+```html
+{% if user.is_authenticated %}
+    Hello, {{ user.username }}!
+{% elif user.is_staff %}
+    Staff member
+{% else %}
+    <a href="{% url 'login' %}">Login</a>
+{% endif %}
+
+{% for product in products %}
+    {{ forloop.counter }}.   {# 1, 2, 3... #}
+    {{ forloop.counter0 }}   {# 0, 1, 2... #}
+    {{ product.name }}
+    {% if forloop.last %}<hr>{% endif %}
+{% empty %}
+    <p>No products found.</p>
+{% endfor %}
+
+{% with total=product.price|multiply:quantity %}
+    <p>Total: ৳{{ total }}</p>
+{% endwith %}
+
+{% load static %}
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+<img src="{% static 'images/logo.png' %}" alt="Logo">
+```
+
+---
+
+## Template Filters
+
+```html
+{{ name|upper }}                     {# UPPERCASE #}
+{{ name|lower }}                     {# lowercase #}
+{{ name|title }}                     {# Title Case #}
+{{ name|truncatechars:50 }}          {# প্রথম 50 chars #}
+{{ description|truncatewords:20 }}   {# প্রথম 20 words #}
+{{ name|default:"Unknown" }}         {# None হলে default #}
+{{ price|floatformat:2 }}            {# 1234.50 #}
+{{ text|linebreaks }}                {# \n → <br> #}
+{{ html_content|safe }}              {# HTML escape করো না #}
+{{ date|date:"d M Y" }}              {# 15 Mar 2024 #}
+{{ date|timesince }}                 {# "3 days ago" #}
+{{ items|length }}                   {# length #}
+{{ items|first }}                    {# প্রথম item #}
+{{ items|last }}                     {# শেষ item #}
+{{ items|slice:":5" }}               {# প্রথম ৫টা #}
+```
+
+---
+
+## Custom Template Tag
+
+`apps/products/templatetags/product_tags.py`:
+```python
+from django import template
+from ..models import Product
+
+register = template.Library()
+
+@register.simple_tag
+def get_featured_products(count=4):
+    return Product.objects.filter(is_featured=True).select_related('category')[:count]
+
+@register.filter(name='currency')
+def currency(value, symbol='৳'):
+    return f"{symbol}{value:,.2f}"
+
+@register.inclusion_tag('components/product_card.html')
+def product_card(product):
+    return {'product': product}
+```
+
+Template এ:
+```html
+{% load product_tags %}
+
+{% get_featured_products as featured %}
+{% for product in featured %}
+    {% product_card product %}
+{% endfor %}
+
+{{ product.price|currency }}   {# → ৳1,234.50 #}
+```
+
+---
+
+## Template ভুলগুলো
+
+```html
+<!-- ❌ N+1 — loop এ related object access -->
+{% for post in posts %}
+    {{ post.author.name }}  {# প্রতিটার জন্য query! #}
+{% endfor %}
+
+<!-- ✅ view এ select_related দিয়ে পাঠাও -->
+{% for post in posts %}
+    {{ post.author.name }}  {# no extra query #}
+{% endfor %}
+
+<!-- ❌ hardcoded URL -->
+<a href="/products/{{ product.slug }}/">Detail</a>
+
+<!-- ✅ url tag -->
+<a href="{% url 'products:detail' slug=product.slug %}">Detail</a>
+
+<!-- ❌ XSS — user input এ |safe -->
+{{ user_comment|safe }}
+
+<!-- ✅ Django auto-escape করে — এটাই default, নিরাপদ -->
+{{ user_comment }}
+```
+
+---
+
+## Context Processors — সব Template এ Data
+
+```python
+# apps/core/context_processors.py
+def site_settings(request):
+    return {
+        'site_name': 'My Shop',
+        'support_email': 'support@myshop.com',
+    }
+```
+
+`settings.py`:
+```python
+TEMPLATES = [{'OPTIONS': {'context_processors': [
+    'django.template.context_processors.request',
+    'django.contrib.auth.context_processors.auth',
+    'django.contrib.messages.context_processors.messages',
+    'apps.core.context_processors.site_settings',  # ← add করো
+]}}]
+```
+
+এখন সব template এ `{{ site_name }}` কাজ করবে।
+
+

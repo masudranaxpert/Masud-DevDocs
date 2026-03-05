@@ -1,0 +1,154 @@
+---
+title: URLs
+description: Django URLs — patterns, regex, namespacing, include, path converters
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## App URLs
+
+`apps/products/urls.py`:
+```python
+from django.urls import path, re_path
+from . import views
+
+app_name = 'products'   # ← namespace অবশ্যই দাও
+
+urlpatterns = [
+    path('', views.ProductListView.as_view(), name='list'),
+    path('create/', views.ProductCreateView.as_view(), name='create'),
+    path('<slug:slug>/', views.product_detail, name='detail'),
+    path('<slug:slug>/edit/', views.ProductUpdateView.as_view(), name='update'),
+    path('<int:pk>/delete/', views.ProductDeleteView.as_view(), name='delete'),
+]
+```
+
+`config/urls.py`:
+```python
+from django.contrib import admin
+from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('products/', include('apps.products.urls')),
+    path('users/', include('apps.users.urls')),
+    path('auth/', include('django.contrib.auth.urls')),
+]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+```
+
+---
+
+## Path Converters
+
+```python
+path('<int:pk>/', view)        # integer — /products/42/
+path('<str:name>/', view)      # string (no slash)
+path('<slug:slug>/', view)     # slug — /products/my-product/
+path('<uuid:uuid>/', view)     # UUID — /products/123e4567-e89b.../
+path('<path:file_path>/', view) # full path including slashes
+```
+
+---
+
+## Regex URL — re_path()
+
+```python
+from django.urls import re_path
+
+urlpatterns = [
+    # শুধু lowercase letter ও hyphen allow
+    re_path(r'^(?P<slug>[a-z0-9-]+)/$', views.detail, name='detail'),
+
+    # ৪ digit year
+    re_path(r'^(?P<year>[0-9]{4})/$', views.archive, name='archive'),
+
+    # Optional trailing slash
+    re_path(r'^products/?$', views.list, name='list'),
+]
+```
+
+<Callout type="info" title="path() vs re_path()">
+  সবসময় `path()` দিয়ে শুরু করো — readable ও simple।
+  Complex pattern দরকার হলে `re_path()` ব্যবহার করো।
+</Callout>
+
+---
+
+## Namespace ও Reverse
+
+```python
+# Template এ
+{% url 'products:list' %}
+{% url 'products:detail' slug=product.slug %}
+{% url 'products:update' slug=product.slug %}
+
+# Python এ
+from django.urls import reverse
+reverse('products:detail', kwargs={'slug': 'my-product'})
+reverse('products:list')
+
+# View এ redirect
+return redirect('products:detail', slug=product.slug)
+```
+
+<Callout type="warn" title="Hardcoded URL কখনো লিখো না">
+  ```html
+  <!-- ❌ ভুল -->
+  <a href="/products/{{ product.slug }}/">Detail</a>
+
+  <!-- ✅ সঠিক -->
+  <a href="{% url 'products:detail' slug=product.slug %}">Detail</a>
+  ```
+  URL structure পরিবর্তন করলে hardcoded URL সব জায়গায় ভেঙে যাবে।
+</Callout>
+
+---
+
+## Include করার Pattern
+
+```python
+# App এর ভেতরে আরো nested URLs
+urlpatterns = [
+    path('', views.list, name='list'),
+    path('<slug:slug>/', include([
+        path('', views.detail, name='detail'),
+        path('edit/', views.edit, name='edit'),
+        path('reviews/', include('apps.reviews.urls', namespace='reviews')),
+    ])),
+]
+```
+
+---
+
+## Regex Common Patterns
+
+```python
+r'(?P<pk>[0-9]+)'           # integer ID
+r'(?P<slug>[-\w]+)'         # slug (word chars + hyphen)
+r'(?P<year>[0-9]{4})'       # 4-digit year
+r'(?P<month>0[1-9]|1[0-2])' # month 01-12
+r'(?P<username>[\w.@+-]+)'  # username
+r'(?P<uuid>[0-9a-f-]{36})'  # UUID
+```
+
+---
+
+## URL Naming Best Practice
+
+```python
+# ✅ RESTful naming convention
+urlpatterns = [
+    path('',                name='list'),      # GET /products/
+    path('create/',         name='create'),    # GET/POST /products/create/
+    path('<slug:slug>/',    name='detail'),    # GET /products/my-product/
+    path('<slug:slug>/edit/',   name='update'), # GET/POST /products/my-product/edit/
+    path('<slug:slug>/delete/', name='delete'), # POST /products/my-product/delete/
+]
+```
+
+

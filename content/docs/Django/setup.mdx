@@ -1,0 +1,181 @@
+---
+title: Setup
+description: Django 6 install, project structure, settings best practices
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Installation
+
+<Tabs items={['uv (Recommended)', 'pip']}>
+  <Tab value="uv (Recommended)">
+    ```bash
+    uv init myproject && cd myproject
+    uv add django environ psycopg[binary]
+    uv run admin startproject config .
+    uv run python manage.py runserver
+    ```
+  </Tab>
+  <Tab value="pip">
+    ```bash
+    python -m venv venv && source venv/bin/activate
+    pip install django environ psycopg[binary]
+    admin startproject config .
+    python manage.py runserver
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Project Structure
+
+```
+myproject/
+├── config/
+│   ├── settings/
+│   │   ├── __init__.py
+│   │   ├── base.py            ← common সব জায়গায়
+│   │   ├── development.py     ← শুধু dev
+│   │   └── production.py      ← শুধু prod
+│   ├── urls.py
+│   ├── wsgi.py
+│   └── asgi.py
+├── apps/
+│   ├── users/                 ← Custom user model এখানে
+│   └── products/
+├── templates/
+├── static/
+├── media/
+├── .env                       ← secrets (git এ দিও না!)
+├── .env.example               ← keys only, no values (git এ দাও)
+└── manage.py
+```
+
+<Callout type="warn" title="settings.py একটাই রাখা — সবচেয়ে বড় ভুল">
+  Production এ DEBUG=True থেকে যাওয়া, SECRET_KEY git এ push হওয়া catastrophic।
+  সবসময় base/development/production এ ভাগ করো।
+</Callout>
+
+---
+
+## Settings
+
+`config/settings/base.py`:
+```python
+from pathlib import Path
+import environ
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+env = environ.Env()
+environ.Env.read_env(BASE_DIR / '.env')
+
+SECRET_KEY = env('SECRET_KEY')
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
+
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'apps.users',
+    'apps.products',
+]
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+AUTH_USER_MODEL = 'users.User'   # ← প্রথম migrate এর আগেই করতে হবে!
+TIME_ZONE = 'Asia/Dhaka'
+USE_TZ = True
+```
+
+`config/settings/development.py`:
+```python
+from .base import *
+
+DEBUG = True
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': env('DB_NAME'),
+        'USER': env('DB_USER'),
+        'PASSWORD': env('DB_PASSWORD'),
+        'HOST': env('DB_HOST', default='localhost'),
+        'PORT': env('DB_PORT', default='5432'),
+    }
+}
+```
+
+`.env`:
+```
+SECRET_KEY=super-secret-50-chars-minimum-random-string-here
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1
+DB_NAME=mydb
+DB_USER=myuser
+DB_PASSWORD=mypassword
+```
+
+`manage.py` তে:
+```python
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.development')
+```
+
+---
+
+## Custom User Model — সবার আগে
+
+<Callout type="warn" title="প্রথম migrate এর আগেই করতে হবে">
+  পরে করতে গেলে database rebuild করতে হয়। এটা প্রতিটা Django project এর প্রথম কাজ।
+</Callout>
+
+<Steps>
+  <Step>
+    ### User model বানাও
+    ```python
+    # apps/users/models.py
+    from django.contrib.auth.models import AbstractUser
+    from django.db import models
+
+    class User(AbstractUser):
+        email = models.EmailField(unique=True)
+        bio   = models.TextField(blank=True)
+        USERNAME_FIELD   = 'email'
+        REQUIRED_FIELDS  = ['username']
+    ```
+  </Step>
+  <Step>
+    ### settings/base.py তে set করো
+    ```python
+    AUTH_USER_MODEL = 'users.User'
+    ```
+  </Step>
+  <Step>
+    ### এখনই migrate করো
+    ```bash
+    python manage.py makemigrations users
+    python manage.py migrate
+    ```
+  </Step>
+</Steps>
+
+---
+
+## App তৈরি
+
+```bash
+mkdir -p apps/products
+python manage.py startapp products apps/products
+```
+
+`apps/products/apps.py`:
+```python
+class ProductsConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'apps.products'   # ← 'products' না, 'apps.products'
+```
+
+

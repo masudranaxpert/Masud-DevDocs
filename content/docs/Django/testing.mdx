@@ -1,0 +1,232 @@
+---
+title: Testing
+description: Django Testing — TestCase, assertNumQueries, Client, pytest-django, fixtures
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## TestCase Basics
+
+```python
+# apps/products/tests/test_models.py
+from django.test import TestCase
+from apps.users.models import User
+from ..models import Product, Category
+
+class ProductModelTest(TestCase):
+
+    def setUp(self):
+        """প্রতিটা test এর আগে চলে"""
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@example.com',
+            password='testpass123'
+        )
+        self.category = Category.objects.create(name='Electronics', slug='electronics')
+        self.product = Product.objects.create(
+            name='Test Phone',
+            slug='test-phone',
+            price=25000,
+            category=self.category,
+            seller=self.user,
+        )
+
+    def test_product_str(self):
+        self.assertEqual(str(self.product), 'Test Phone')
+
+    def test_product_price_positive(self):
+        self.assertGreater(self.product.price, 0)
+
+    def test_get_absolute_url(self):
+        url = self.product.get_absolute_url()
+        self.assertIn('test-phone', url)
+```
+
+---
+
+## View Testing — Client
+
+```python
+# apps/products/tests/test_views.py
+from django.test import TestCase, Client
+from django.urls import reverse
+
+class ProductViewTest(TestCase):
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(email='t@t.com', password='pass')
+        self.product = Product.objects.create(
+            name='Phone', slug='phone', price=10000, seller=self.user
+        )
+
+    def test_product_list_returns_200(self):
+        response = self.client.get(reverse('products:list'))
+        self.assertEqual(response.status_code, 200)
+
+    def test_product_detail_returns_200(self):
+        url = reverse('products:detail', kwargs={'slug': 'phone'})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Phone')
+
+    def test_product_create_requires_login(self):
+        url = reverse('products:create')
+        response = self.client.get(url)
+        self.assertRedirects(response, f'/auth/login/?next={url}')
+
+    def test_product_create_logged_in(self):
+        self.client.login(email='t@t.com', password='pass')
+        url = reverse('products:create')
+        data = {'name': 'New Phone', 'price': '20000', 'slug': 'new-phone'}
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302)   # redirect after create
+        self.assertTrue(Product.objects.filter(slug='new-phone').exists())
+
+    def test_template_used(self):
+        url = reverse('products:list')
+        response = self.client.get(url)
+        self.assertTemplateUsed(response, 'products/list.html')
+```
+
+---
+
+## assertNumQueries — Performance Test
+
+```python
+class ProductQueryTest(TestCase):
+
+    def setUp(self):
+        # ✅ Real data দিয়ে test করো — empty DB তে N+1 ধরা যায় না
+        for i in range(10):
+            user = User.objects.create_user(email=f'user{i}@t.com', password='pass')
+            Product.objects.create(
+                name=f'Product {i}', slug=f'product-{i}',
+                price=1000, seller=user
+            )
+
+    def test_product_list_query_count(self):
+        """Product list এ N+1 নেই কিনা check করো"""
+        with self.assertNumQueries(1):   # ← ঠিক ১টা query হওয়া উচিত
+            list(Product.objects.select_related('seller').all())
+
+    def test_product_list_view_queries(self):
+        """View এ কতটা query হচ্ছে"""
+        with self.assertNumQueries(2):   # auth check + product query
+            response = self.client.get(reverse('products:list'))
+        self.assertEqual(response.status_code, 200)
+
+    def test_no_n_plus_one(self):
+        """N+1 আছে কিনা — data বাড়ালে query count বাড়া উচিত না"""
+        # 10 products এ কতটা query
+        with self.assertNumQueries(1) as cm_10:
+            list(Product.objects.select_related('seller').all())
+
+        # আরো 10 add করো
+        for i in range(10, 20):
+            Product.objects.create(name=f'P{i}', slug=f'p-{i}', price=1000)
+
+        # 20 products এও একই query count হওয়া উচিত
+        with self.assertNumQueries(1):
+            list(Product.objects.select_related('seller').all())
+```
+
+<Callout type="info" title="assertNumQueries এর গুরুত্ব">
+  Data বাড়লে query count বাড়া মানে N+1 আছে। `assertNumQueries` দিয়ে এটা automatically catch করা যায়।
+  Production এ 10টা product এর সময় fast, 10,000টা product এ crash।
+</Callout>
+
+---
+
+## pytest-django (Recommended)
+
+```bash
+pip install pytest-django pytest-cov faker
+```
+
+`pytest.ini`:
+```ini
+[pytest]
+DJANGO_SETTINGS_MODULE = config.settings.development
+python_files = tests.py test_*.py *_tests.py
+```
+
+```python
+# apps/products/tests/test_views.py
+import pytest
+from django.urls import reverse
+from apps.products.models import Product
+
+@pytest.fixture
+def user(db):
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    return User.objects.create_user(email='t@t.com', password='pass')
+
+@pytest.fixture
+def product(db, user):
+    return Product.objects.create(
+        name='Phone', slug='phone', price=10000, seller=user
+    )
+
+@pytest.mark.django_db
+def test_product_list(client, product):
+    url = reverse('products:list')
+    response = client.get(url)
+    assert response.status_code == 200
+    assert b'Phone' in response.content
+
+@pytest.mark.django_db
+def test_query_count(client, django_assert_num_queries, product):
+    url = reverse('products:list')
+    with django_assert_num_queries(2):
+        response = client.get(url)
+    assert response.status_code == 200
+```
+
+```bash
+pytest                          # সব test চালাও
+pytest -v                       # verbose
+pytest apps/products/           # specific app
+pytest --cov=apps --cov-report=html  # coverage
+pytest -k "test_product"        # keyword filter
+```
+
+---
+
+## Test Run Commands
+
+```bash
+# Django built-in
+python manage.py test
+python manage.py test apps.products
+python manage.py test apps.products.tests.test_views.ProductViewTest
+python manage.py test --keepdb    # test DB delete করবে না (fast)
+python manage.py test -v 2        # verbose output
+```
+
+---
+
+## Django Test Assertions
+
+```python
+# Response assertions
+self.assertEqual(response.status_code, 200)
+self.assertContains(response, 'Product Name')
+self.assertNotContains(response, 'Error')
+self.assertRedirects(response, '/products/')
+self.assertTemplateUsed(response, 'products/list.html')
+
+# Form assertions
+self.assertFormError(response, 'form', 'email', 'This field is required.')
+
+# Model assertions
+self.assertTrue(Product.objects.filter(slug='phone').exists())
+self.assertEqual(Product.objects.count(), 5)
+
+# Database queries
+with self.assertNumQueries(1):
+    Product.objects.select_related('seller').all()[:]
+```
+
+

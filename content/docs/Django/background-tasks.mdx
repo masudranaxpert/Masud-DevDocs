@@ -1,0 +1,186 @@
+---
+title: Background Tasks
+description: Django 6 Background Tasks — @task decorator, enqueue, backends, best practices
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Background Tasks কী?
+
+Django 6 এ built-in Tasks framework। HTTP request-response cycle এর **বাইরে** কাজ চালাও — email, heavy processing, notifications।
+
+<Callout type="info" title="Django 6 নতুন Feature">
+  আগে Celery বা rq দরকার হতো। Django 6 এ এটা built-in — কিন্তু এটা task **definition ও queuing** করে। Execute করার জন্য external worker দরকার।
+</Callout>
+
+---
+
+## Setup
+
+```python
+# settings.py
+TASKS = {
+    'default': {
+        'BACKEND': 'django.tasks.backends.database.DatabaseTaskBackend',
+        # Development ও testing এর জন্য। Production এ Redis/Celery backend ব্যবহার করো।
+    }
+}
+
+INSTALLED_APPS += ['django_tasks']   # database backend এর জন্য
+```
+
+```bash
+python manage.py migrate   # task table তৈরি হবে
+```
+
+---
+
+## Task Define করো
+
+```python
+# apps/users/tasks.py
+from django.core.mail import send_mail
+from django.tasks import task
+
+@task
+def send_welcome_email(user_id: int):
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    try:
+        user = User.objects.get(pk=user_id)
+        send_mail(
+            subject='Welcome to Our Platform!',
+            message=f'Hi {user.username}, welcome!',
+            from_email='noreply@mysite.com',
+            recipient_list=[user.email],
+        )
+    except User.DoesNotExist:
+        pass   # user delete হয়ে গেলে skip
+
+
+@task
+def process_order(order_id: int):
+    from apps.orders.models import Order
+    order = Order.objects.select_related('user').prefetch_related('items').get(pk=order_id)
+    # Heavy processing
+    order.status = 'processed'
+    order.save(update_fields=['status'])
+
+
+@task
+def generate_report(report_id: int):
+    """Long-running report generation"""
+    from apps.reports.models import Report
+    report = Report.objects.get(pk=report_id)
+    report.status = 'generating'
+    report.save()
+
+    # Heavy computation...
+    data = compute_report_data(report)
+
+    report.data = data
+    report.status = 'completed'
+    report.save()
+```
+
+---
+
+## Task Enqueue করো (View থেকে)
+
+```python
+# apps/users/views.py
+from .tasks import send_welcome_email, process_order
+
+def register(request):
+    if request.method == 'POST':
+        form = RegistrationForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            # ✅ HTTP cycle এর বাইরে চালাও
+            send_welcome_email.enqueue(user_id=user.pk)
+            messages.success(request, 'Welcome!')
+            return redirect('/')
+    else:
+        form = RegistrationForm()
+    return render(request, 'users/register.html', {'form': form})
+
+
+def checkout(request):
+    order = create_order(request)
+    # Order create হওয়ার পরে heavy processing background এ
+    process_order.enqueue(order_id=order.pk)
+    return redirect('orders:detail', pk=order.pk)
+```
+
+---
+
+## Task Result Handle
+
+```python
+from django.tasks import task
+from django.tasks.backends.database import DatabaseTaskBackend
+
+# Result পাও
+result = send_welcome_email.enqueue(user_id=1)
+print(result.id)        # task ID
+print(result.status)    # 'QUEUED', 'RUNNING', 'COMPLETE', 'FAILED'
+print(result.return_value)  # task return value (complete হলে)
+```
+
+---
+
+## Celery (Production Recommended)
+
+Django 6 এর built-in backend গুলো development এর জন্য। Production এ Celery বেশি powerful।
+
+```python
+# pip install celery redis celery-results
+
+# config/celery.py
+from celery import Celery
+import os
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.production')
+app = Celery('myproject')
+app.config_from_object('django.conf:settings', namespace='CELERY')
+app.autodiscover_tasks()
+
+# settings.py
+CELERY_BROKER_URL = env('REDIS_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = env('REDIS_URL', default='redis://localhost:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+```
+
+```python
+# apps/users/tasks.py — Celery version
+from celery import shared_task
+
+@shared_task
+def send_welcome_email(user_id: int):
+    ...
+
+# View এ
+send_welcome_email.delay(user_id=user.pk)           # async
+send_welcome_email.apply_async(args=[user.pk], countdown=60)  # 60 sec পরে
+```
+
+```bash
+# Worker চালাও
+celery -A config worker -l info
+celery -A config beat -l info     # periodic tasks
+```
+
+---
+
+## Background Task vs Celery
+
+| | Django 6 Tasks | Celery |
+|---|---|---|
+| Setup | Simple, built-in | Requires Redis/RabbitMQ |
+| Periodic tasks | No built-in | Yes (celery beat) |
+| Monitoring | Basic | Flower UI |
+| Production | Development + simple prod | Complex production |
+| Retry logic | Basic | Advanced |
+
+
