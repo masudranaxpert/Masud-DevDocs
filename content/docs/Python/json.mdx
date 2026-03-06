@@ -1,0 +1,361 @@
+---
+title: json
+description: Python json module — parse, dump, custom encoder/decoder, streaming, edge cases
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## json Module — Basics
+
+```python
+import json
+
+# Python object → JSON string
+data = {"name": "Rahim", "age": 25, "active": True, "score": None}
+json.dumps(data)
+# '{"name": "Rahim", "age": 25, "active": true, "score": null}'
+
+# JSON string → Python object
+text = '{"name": "Rahim", "age": 25}'
+obj = json.loads(text)
+obj["name"]   # "Rahim"
+type(obj)     # dict
+
+# Python ↔ JSON type mapping
+# Python        JSON
+# dict      →   object  {}
+# list/tuple→   array   []
+# str       →   string  ""
+# int/float →   number
+# True      →   true
+# False     →   false
+# None      →   null
+```
+
+---
+
+## dumps — Python → JSON String
+
+```python
+import json
+
+data = {
+    "name": "Rahim",
+    "scores": [85, 92, 78],
+    "address": {"city": "Dhaka", "zip": "1200"},
+    "active": True,
+    "note": None
+}
+
+# Basic
+json.dumps(data)
+
+# Pretty print
+json.dumps(data, indent=2)
+# {
+#   "name": "Rahim",
+#   "scores": [85, 92, 78],
+#   ...
+# }
+
+# Compact (no spaces)
+json.dumps(data, separators=(',', ':'))
+# '{"name":"Rahim","scores":[85,92,78],...}'
+
+# Sort keys
+json.dumps(data, sort_keys=True)
+
+# Non-ASCII characters
+bangla = {"name": "রহিম", "city": "ঢাকা"}
+json.dumps(bangla)                       # '{"name": "\\u09b0\\u09b9\\u09bf\\u09ae", ...}'
+json.dumps(bangla, ensure_ascii=False)   # '{"name": "রহিম", "city": "ঢাকা"}' ← readable
+```
+
+---
+
+## loads — JSON String → Python
+
+```python
+import json
+
+# Basic
+text = '{"name": "Rahim", "age": 25, "scores": [85, 92]}'
+obj = json.loads(text)
+obj["scores"]   # [85, 92]
+
+# ❌ Common mistake — single quotes না! JSON এ double quotes
+bad = "{'name': 'Rahim'}"
+json.loads(bad)   # JSONDecodeError!
+
+# Error handling
+def safe_parse(text: str) -> dict | None:
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        print(f"JSON parse error: {e.msg} at line {e.lineno}, col {e.colno}")
+        return None
+
+# object_hook — custom class এ convert করো
+from dataclasses import dataclass
+
+@dataclass
+class User:
+    name: str
+    age: int
+
+def user_from_dict(d: dict) -> User:
+    if "name" in d and "age" in d:
+        return User(d["name"], d["age"])
+    return d
+
+user = json.loads('{"name": "Rahim", "age": 25}', object_hook=user_from_dict)
+type(user)    # User
+user.name     # "Rahim"
+```
+
+---
+
+## File এ Read/Write
+
+```python
+import json
+from pathlib import Path
+
+data = {"users": [{"name": "Rahim", "age": 25}]}
+
+# Write to file
+with open("data.json", "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
+
+# Read from file
+with open("data.json", "r", encoding="utf-8") as f:
+    loaded = json.load(f)
+
+# pathlib way (Python 3.9+)
+path = Path("data.json")
+path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+loaded = json.loads(path.read_text(encoding="utf-8"))
+```
+
+---
+
+## Custom Encoder/Decoder
+
+<Tabs items={['Custom Encoder', 'Custom Decoder', 'default= hook']}>
+  <Tab value="Custom Encoder">
+    ```python
+    import json
+    from datetime import datetime, date
+    from decimal import Decimal
+
+    class CustomEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, datetime):
+                return obj.isoformat()           # "2025-10-07T12:30:00"
+            if isinstance(obj, date):
+                return obj.isoformat()           # "2025-10-07"
+            if isinstance(obj, Decimal):
+                return float(obj)                # Decimal → float
+            if isinstance(obj, set):
+                return sorted(list(obj))         # set → sorted list
+            if hasattr(obj, '__dict__'):
+                return obj.__dict__              # object → dict
+            return super().default(obj)          # other → TypeError
+
+    data = {
+        "created": datetime(2025, 10, 7, 12, 30),
+        "price": Decimal("99.99"),
+        "tags": {"python", "json"},
+    }
+
+    json.dumps(data, cls=CustomEncoder, ensure_ascii=False)
+    # '{"created": "2025-10-07T12:30:00", "price": 99.99, "tags": ["json", "python"]}'
+    ```
+  </Tab>
+  <Tab value="Custom Decoder">
+    ```python
+    import json
+    from datetime import datetime
+
+    def decode_hook(d: dict):
+        """JSON object কে custom Python object এ convert করো"""
+        # datetime auto-detect
+        for key, val in d.items():
+            if isinstance(val, str):
+                try:
+                    d[key] = datetime.fromisoformat(val)
+                except ValueError:
+                    pass
+        # Type field দিয়ে specific class
+        if d.get("__type__") == "User":
+            return User(d["name"], d["age"])
+        return d
+
+    text = '{"name": "Rahim", "created": "2025-10-07T12:30:00"}'
+    result = json.loads(text, object_hook=decode_hook)
+    type(result["created"])   # datetime
+    ```
+  </Tab>
+  <Tab value="default= hook">
+    ```python
+    import json
+    from dataclasses import dataclass, asdict
+
+    @dataclass
+    class Product:
+        name: str
+        price: float
+        tags: list[str]
+
+    def default_encoder(obj):
+        """dumps() এর default= parameter"""
+        if isinstance(obj, Product):
+            return asdict(obj)   # dataclass → dict
+        raise TypeError(f"Not serializable: {type(obj)}")
+
+    products = [
+        Product("Widget", 9.99, ["tools", "hardware"]),
+        Product("Gadget", 24.99, ["electronics"]),
+    ]
+
+    json.dumps(products, default=default_encoder, indent=2)
+    # [
+    #   {"name": "Widget", "price": 9.99, "tags": ["tools", "hardware"]},
+    #   ...
+    # ]
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Large JSON — Streaming
+
+```python
+import json
+
+# ❌ Large file — সব memory তে load করে
+with open("huge.json") as f:
+    data = json.load(f)   # could be GBs!
+
+# ✅ ijson library — streaming parser
+# pip install ijson
+import ijson
+
+with open("huge.json", "rb") as f:
+    for item in ijson.items(f, "users.item"):
+        process(item)   # একটা একটা করে process
+
+# ✅ JSONL (JSON Lines) — প্রতিটা line একটা JSON object
+def read_jsonl(filepath: str):
+    with open(filepath, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                yield json.loads(line)
+
+def write_jsonl(filepath: str, records):
+    with open(filepath, "w", encoding="utf-8") as f:
+        for record in records:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+# JSONL use
+write_jsonl("data.jsonl", [
+    {"id": 1, "name": "Rahim"},
+    {"id": 2, "name": "Karim"},
+])
+
+for record in read_jsonl("data.jsonl"):
+    print(record)
+```
+
+---
+
+## Common Mistakes
+
+```python
+# ❌ tuple → list হয়ে যায়
+data = {"point": (10, 20)}
+encoded = json.dumps(data)   # '{"point": [10, 20]}'
+decoded = json.loads(encoded)
+type(decoded["point"])       # list, not tuple!
+
+# ❌ dict key সবসময় string হয়ে যায়
+data = {1: "one", 2: "two"}
+encoded = json.dumps(data)   # '{"1": "one", "2": "two"}'
+decoded = json.loads(encoded)
+decoded[1]    # KeyError! key এখন "1" (string)
+decoded["1"]  # "one" ✅
+
+# ❌ JSONDecodeError — trailing comma না!
+bad_json = '{"name": "Rahim",}'   # trailing comma!
+json.loads(bad_json)   # JSONDecodeError
+
+# ✅ Use ast.literal_eval for Python dict-like strings
+import ast
+ast.literal_eval("{'name': 'Rahim'}")   # works with single quotes
+```
+
+---
+
+## Practice Problems
+
+**P1.** একটা list of users (name, age, email) কে JSON file এ লেখো এবং পড়ো।
+
+**P2.** `datetime` objects সহ data কে JSON এ serialize/deserialize করো।
+
+**P3.** Nested JSON থেকে সব specific key এর values বের করো (recursively)।
+
+<details>
+<summary>Solutions</summary>
+
+```python
+# P1
+import json
+from pathlib import Path
+
+users = [
+    {"name": "Rahim", "age": 25, "email": "rahim@example.com"},
+    {"name": "Karim", "age": 30, "email": "karim@example.com"},
+]
+path = Path("users.json")
+path.write_text(json.dumps(users, indent=2, ensure_ascii=False))
+loaded = json.loads(path.read_text())
+print(loaded[0]["name"])   # Rahim
+
+# P2
+from datetime import datetime
+class DatetimeEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return {"__datetime__": obj.isoformat()}
+        return super().default(obj)
+
+def datetime_decoder(d):
+    if "__datetime__" in d:
+        return datetime.fromisoformat(d["__datetime__"])
+    return d
+
+data = {"event": "launch", "time": datetime(2025, 10, 7, 12)}
+text = json.dumps(data, cls=DatetimeEncoder)
+back = json.loads(text, object_hook=datetime_decoder)
+type(back["time"])   # datetime
+
+# P3
+def find_values(obj, target_key: str) -> list:
+    results = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k == target_key:
+                results.append(v)
+            results.extend(find_values(v, target_key))
+    elif isinstance(obj, list):
+        for item in obj:
+            results.extend(find_values(item, target_key))
+    return results
+
+data = {"users": [{"name": "Rahim"}, {"name": "Karim"}], "admin": {"name": "Root"}}
+find_values(data, "name")   # ['Rahim', 'Karim', 'Root']
+```
+</details>

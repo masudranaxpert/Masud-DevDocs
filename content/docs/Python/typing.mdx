@@ -1,0 +1,271 @@
+---
+title: Type Hints
+description: Python typing — basic hints, generics, Protocol, TypeVar, deferred annotations (3.14), runtime check
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Type Hints কী?
+
+Python dynamically typed, কিন্তু 3.5+ থেকে **optional type hints** আছে। Runtime এ enforce হয় না, কিন্তু IDE, mypy, pyright বুঝতে পারে।
+
+```python
+# Without hints
+def add(a, b):
+    return a + b
+
+# With hints — এখন IDE/mypy জানে কী expect করা হচ্ছে
+def add(a: int, b: int) -> int:
+    return a + b
+
+# Variable hints
+name: str = "Rahim"
+scores: list[int] = [90, 85]
+config: dict[str, str] = {"host": "localhost"}
+```
+
+---
+
+## Python 3.14 — Deferred Annotations (PEP 649)
+
+```python
+# Python 3.14 তে annotations এখন lazily evaluate হয়
+# Forward reference automatically কাজ করে — 'quotes' লাগে না!
+
+class Node:
+    def __init__(self, value: int, next: Node | None = None):
+        # Python 3.14 এ এটা কাজ করে!
+        # আগে লিখতে হতো: next: 'Node | None = None'
+        self.value = value
+        self.next = next
+
+# Python 3.10+ union syntax (| operator)
+def process(value: int | str | None) -> str | None:
+    if value is None:
+        return None
+    return str(value)
+```
+
+---
+
+## Common Types
+
+```python
+from typing import Optional, Union, Any, Callable, Literal
+
+# Optional — None হতে পারে
+def find_user(id: int) -> Optional[str]:   # str | None
+    pass
+
+# Union — multiple types (Python 3.10+ এ | দাও)
+def parse(value: Union[str, int]) -> int:  # পুরনো syntax
+    return int(value)
+
+def parse(value: str | int) -> int:        # নতুন syntax (3.10+)
+    return int(value)
+
+# Any — যেকোনো type (type checking skip)
+def flexible(data: Any) -> Any:
+    return data
+
+# Callable
+def apply(func: Callable[[int, int], int], a: int, b: int) -> int:
+    return func(a, b)
+
+# Literal — specific values
+def set_direction(direction: Literal["left", "right", "up", "down"]) -> None:
+    pass
+```
+
+---
+
+## Collections
+
+```python
+# Python 3.9+ — built-in generics (from typing import লাগে না)
+def process_list(items: list[int]) -> list[str]:
+    return [str(x) for x in items]
+
+def lookup(data: dict[str, int]) -> None:
+    pass
+
+def unique(items: set[str]) -> frozenset[str]:
+    return frozenset(items)
+
+# Tuple — fixed length
+def get_point() -> tuple[int, int]:
+    return (3, 4)
+
+# Variable length tuple
+def get_coords() -> tuple[float, ...]:
+    return (1.0, 2.0, 3.0)
+
+# TypeAlias — পরিষ্কার নাম দাও
+from typing import TypeAlias
+
+Vector: TypeAlias = list[float]
+Matrix: TypeAlias = list[list[float]]
+
+def dot_product(a: Vector, b: Vector) -> float:
+    return sum(x*y for x, y in zip(a, b))
+```
+
+---
+
+## TypeVar — Generic Functions
+
+```python
+from typing import TypeVar
+
+T = TypeVar('T')
+
+def first(items: list[T]) -> T:
+    """যেকোনো type এর list এর প্রথম element return করো"""
+    return items[0]
+
+first([1, 2, 3])        # return type: int
+first(["a", "b"])       # return type: str
+first([1.0, 2.0])       # return type: float
+
+# Bounded TypeVar
+Numeric = TypeVar('Numeric', int, float)
+
+def double(x: Numeric) -> Numeric:
+    return x * 2
+
+# Generic class
+from typing import Generic
+
+class Stack(Generic[T]):
+    def __init__(self) -> None:
+        self._items: list[T] = []
+
+    def push(self, item: T) -> None:
+        self._items.append(item)
+
+    def pop(self) -> T:
+        return self._items.pop()
+
+    def peek(self) -> T:
+        return self._items[-1]
+
+int_stack: Stack[int] = Stack()
+int_stack.push(1)
+int_stack.push(2)
+```
+
+---
+
+## Protocol — Structural Subtyping
+
+```python
+from typing import Protocol, runtime_checkable
+
+# Protocol — "duck typing" formally define করো
+class Drawable(Protocol):
+    def draw(self) -> None: ...
+    def get_color(self) -> str: ...
+
+class Circle:
+    def draw(self) -> None:
+        print("Drawing circle")
+    def get_color(self) -> str:
+        return "red"
+
+class Square:
+    def draw(self) -> None:
+        print("Drawing square")
+    def get_color(self) -> str:
+        return "blue"
+
+# Circle ও Square explicitly inherit করেনি — তবু কাজ করে!
+def render(shape: Drawable) -> None:
+    print(f"Color: {shape.get_color()}")
+    shape.draw()
+
+render(Circle())   # ✅ works
+render(Square())   # ✅ works
+
+# Runtime check এর জন্য
+@runtime_checkable
+class Sizeable(Protocol):
+    def __len__(self) -> int: ...
+
+isinstance([1, 2, 3], Sizeable)   # → True
+```
+
+---
+
+## dataclass with Types
+
+```python
+from dataclasses import dataclass
+from typing import ClassVar
+
+@dataclass
+class Product:
+    name: str
+    price: float
+    stock: int = 0
+    _id: ClassVar[int] = 0   # ClassVar — instance variable না
+
+    def __post_init__(self):
+        Product._id += 1
+        self.id = Product._id
+
+    def is_available(self) -> bool:
+        return self.stock > 0
+
+    def discount(self, percent: float) -> "Product":
+        return Product(
+            name=self.name,
+            price=self.price * (1 - percent/100),
+            stock=self.stock
+        )
+```
+
+---
+
+## Runtime Type Checking
+
+```python
+# beartype — fast runtime type checking
+# pip install beartype
+
+from beartype import beartype
+
+@beartype
+def add(a: int, b: int) -> int:
+    return a + b
+
+add(1, 2)       # ✅ works
+add(1, "2")     # ❌ BeartypeException at runtime!
+
+# pydantic — data validation
+# pip install pydantic
+
+from pydantic import BaseModel, field_validator
+
+class User(BaseModel):
+    name: str
+    age: int
+    email: str
+
+    @field_validator("age")
+    @classmethod
+    def age_must_be_positive(cls, v):
+        if v < 0:
+            raise ValueError("Age must be positive")
+        return v
+
+user = User(name="Rahim", age=25, email="r@example.com")
+User(name="X", age=-1, email="x")   # → ValidationError!
+```
+
+<Callout type="info" title="mypy দিয়ে static check করো">
+  ```bash
+  pip install mypy
+  mypy your_file.py    # type errors দেখাবে
+  mypy --strict your_file.py   # strict mode
+  ```
+</Callout>

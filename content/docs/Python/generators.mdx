@@ -1,0 +1,326 @@
+---
+title: Generators
+description: Python Generators — yield, lazy evaluation, send(), generator pipeline, itertools
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Generator কী?
+
+Generator হলো এমন function যেটা **একবারে সব value return না করে**, একটা একটা করে `yield` করে। **Lazy evaluation** — demand এ মাত্র একটা value compute করে।
+
+```python
+# Normal function — সব একবারে return
+def get_numbers():
+    return [1, 2, 3, 4, 5]   # সব memory তে load করে
+
+# Generator function — একটা একটা yield
+def count_up():
+    print("Starting...")
+    yield 1
+    print("After 1")
+    yield 2
+    print("After 2")
+    yield 3
+    print("Finished")
+
+gen = count_up()         # কিছু execute হয় না এখনো
+print(type(gen))         # → <class 'generator'>
+
+next(gen)   # → "Starting..." print হয়, তারপর 1 return করে
+next(gen)   # → "After 1" print হয়, তারপর 2 return করে
+next(gen)   # → "After 2" print হয়, তারপর 3 return করে
+next(gen)   # → "Finished" print হয়, StopIteration raise হয়
+```
+
+**Generator এ কী হয়:**
+- `next()` call করলে function resume হয় পরবর্তী `yield` পর্যন্ত
+- `yield` এ value দেয় এবং **pause** করে
+- আবার `next()` করলে সেখান থেকে resume
+
+---
+
+## Normal Function vs Generator
+
+```python
+import sys
+
+# Memory comparison
+def get_squares_list(n):
+    return [x**2 for x in range(n)]      # n টা element memory তে
+
+def get_squares_gen(n):
+    for x in range(n):
+        yield x**2                        # একটাই element memory তে
+
+n = 1_000_000
+
+list_result = get_squares_list(n)
+gen_result  = get_squares_gen(n)
+
+print(sys.getsizeof(list_result))   # → ~8MB
+print(sys.getsizeof(gen_result))    # → 208 bytes!!! (just the object)
+
+# Use করা একই — for loop এ
+for sq in get_squares_gen(10):
+    print(sq, end=" ")   # → 0 1 4 9 16 25 36 49 64 81
+```
+
+---
+
+## Generator Expression
+
+```python
+# List comprehension
+squares_list = [x**2 for x in range(100)]   # list [] — সব একসাথে
+
+# Generator expression
+squares_gen  = (x**2 for x in range(100))   # () — lazy
+
+# Sum, any, all এ directly use করো — fastest way
+total = sum(x**2 for x in range(1000))
+has_even = any(x % 2 == 0 for x in some_list)
+all_positive = all(x > 0 for x in numbers)
+big_ones = list(x for x in data if x > 100)  # filter + convert
+
+# Chaining
+result = sum(
+    x**2
+    for x in range(100)
+    if x % 3 == 0        # filter করো, তারপর square করো
+)
+```
+
+---
+
+## yield from — Sub-generator Delegate
+
+```python
+# yield from — আরেকটা iterable এ delegate করো
+def flatten(nested):
+    for item in nested:
+        if isinstance(item, list):
+            yield from flatten(item)   # recursive delegation
+        else:
+            yield item
+
+data = [1, [2, 3], [4, [5, 6]], 7]
+list(flatten(data))   # → [1, 2, 3, 4, 5, 6, 7]
+
+# চেইন করো
+def chain(*iterables):
+    for iterable in iterables:
+        yield from iterable   # প্রতিটার সব elements yield করো
+
+list(chain([1, 2], [3, 4], [5, 6]))   # → [1, 2, 3, 4, 5, 6]
+```
+
+---
+
+## Infinite Generator
+
+```python
+# অনেক সময় infinite sequence দরকার হয়
+def count(start=0, step=1):
+    current = start
+    while True:
+        yield current
+        current += step
+
+def fibonacci():
+    a, b = 0, 1
+    while True:
+        yield a
+        a, b = b, a + b
+
+# Infinite generator থেকে নেওয়া
+import itertools
+
+# প্রথম 10টা fibonacci
+list(itertools.islice(fibonacci(), 10))
+# → [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
+
+# 1 থেকে শুরু করে even গুলো নাও
+list(itertools.islice(
+    (x for x in count(1) if x % 2 == 0),
+    5
+))
+# → [2, 4, 6, 8, 10]
+```
+
+---
+
+## send() — Generator এ Data পাঠাও
+
+```python
+# Generator দুইদিকেই communicate করতে পারে
+def accumulator():
+    total = 0
+    while True:
+        value = yield total   # yield দিয়ে total দেয় এবং value receive করে
+        if value is None:
+            break
+        total += value
+
+gen = accumulator()
+next(gen)        # → 0  (generator start করো — প্রথম yield পর্যন্ত যাও)
+gen.send(10)     # → 10
+gen.send(20)     # → 30
+gen.send(5)      # → 35
+
+# Running average generator
+def running_average():
+    total = 0
+    count = 0
+    average = None
+    while True:
+        value = yield average
+        if value is None:
+            break
+        total += value
+        count += 1
+        average = total / count
+
+gen = running_average()
+next(gen)         # → None (initialize)
+gen.send(10)      # → 10.0
+gen.send(20)      # → 15.0
+gen.send(30)      # → 20.0
+```
+
+---
+
+## Generator Pipeline — Powerful Pattern
+
+```python
+# Data processing pipeline — প্রতিটা stage একটা generator
+def read_lines(filename):
+    """Stage 1: file থেকে lines পড়ো"""
+    with open(filename) as f:
+        yield from f
+
+def filter_comments(lines):
+    """Stage 2: comment lines বাদ দাও"""
+    for line in lines:
+        if not line.startswith('#'):
+            yield line.strip()
+
+def parse_numbers(lines):
+    """Stage 3: string → float convert করো"""
+    for line in lines:
+        if line:
+            yield float(line)
+
+def above_threshold(numbers, threshold):
+    """Stage 4: threshold এর উপরের numbers রাখো"""
+    for num in numbers:
+        if num > threshold:
+            yield num
+
+# Pipeline compose করো — কোনো intermediate list তৈরি হয় না!
+def process_file(filename, threshold=50.0):
+    lines   = read_lines(filename)
+    clean   = filter_comments(lines)
+    numbers = parse_numbers(clean)
+    big     = above_threshold(numbers, threshold)
+    return sum(big)
+
+# পুরো pipeline, millions of lines, constant memory!
+result = process_file("data.txt", threshold=50)
+```
+
+<Callout type="info" title="Generator Pipeline এর সুবিধা">
+  প্রতিটা stage একটা করে element process করে। পুরো dataset memory তে লোড হয় না।
+  Unix pipe এর মতো: `cat file | grep "pattern" | awk '{print $1}'`
+</Callout>
+
+---
+
+## Generator vs Iterator vs List — কখন কোনটা?
+
+| | List | Generator | Iterator |
+|---|---|---|---|
+| Memory | সব একসাথে | একটা একটা | একটা একটা |
+| Reusable? | ✅ | ❌ (exhausted) | ❌ |
+| Random access | ✅ `[i]` | ❌ | ❌ |
+| Length জানা যায়? | ✅ `len()` | ❌ | ❌ |
+| কখন ব্যবহার | বারবার access করবে | একবার process | custom iteration |
+
+---
+
+## Practice Problems
+
+**P1.** একটা generator লিখো যেটা prime numbers generate করবে (infinite)।
+
+**P2.** File reading generator লিখো যেটা একটা বড় CSV file লাইন লাইন parse করবে — memory efficient।
+
+**P3.** `take(n, iterable)` function লিখো generator expression দিয়ে।
+
+**P4.** `window(iterable, size)` sliding window generator লিখো।
+
+<details>
+<summary>Solutions</summary>
+
+```python
+# P1 — Prime number generator
+def primes():
+    def is_prime(n):
+        if n < 2:
+            return False
+        if n == 2:
+            return True
+        if n % 2 == 0:
+            return False
+        for i in range(3, int(n**0.5) + 1, 2):
+            if n % i == 0:
+                return False
+        return True
+
+    n = 2
+    while True:
+        if is_prime(n):
+            yield n
+        n += 1
+
+import itertools
+list(itertools.islice(primes(), 10))
+# → [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
+
+# P2 — CSV line generator
+def csv_reader(filename):
+    with open(filename) as f:
+        header = f.readline().strip().split(',')
+        for line in f:
+            values = line.strip().split(',')
+            yield dict(zip(header, values))
+
+# for row in csv_reader("big_file.csv"):
+#     process(row)
+
+# P3
+def take(n, iterable):
+    return (x for x, _ in zip(iterable, range(n)))
+
+list(take(5, primes()))   # → [2, 3, 5, 7, 11]
+
+# P4
+def window(iterable, size):
+    from collections import deque
+    it = iter(iterable)
+    buf = deque(maxlen=size)
+    # প্রথম window ভরো
+    for _ in range(size):
+        try:
+            buf.append(next(it))
+        except StopIteration:
+            return
+    yield tuple(buf)
+    # slide করো
+    for item in it:
+        buf.append(item)
+        yield tuple(buf)
+
+list(window([1, 2, 3, 4, 5], 3))
+# → [(1, 2, 3), (2, 3, 4), (3, 4, 5)]
+```
+</details>

@@ -1,0 +1,200 @@
+---
+title: functools
+description: Python functools — lru_cache, partial, reduce, wraps, cached_property, total_ordering
+---
+
+## functools — Function Tools
+
+```python
+import functools
+```
+
+---
+
+## lru_cache — Memoization
+
+```python
+from functools import lru_cache, cache
+
+# lru_cache — Least Recently Used cache
+@lru_cache(maxsize=128)
+def fib(n: int) -> int:
+    if n <= 1: return n
+    return fib(n-1) + fib(n-2)
+
+fib(100)   # instant!
+fib.cache_info()    # CacheInfo(hits=98, misses=101, maxsize=128, currsize=101)
+fib.cache_clear()   # cache reset
+
+# cache — Python 3.9+, same as lru_cache(maxsize=None)
+@cache
+def expensive(n: int) -> int:
+    return sum(range(n))
+
+# Note: arguments must be hashable
+# ❌ list, dict arguments → TypeError
+@lru_cache
+def process(items: tuple) -> int:   # tuple ✅
+    return sum(items)
+
+process((1, 2, 3))   # 6
+```
+
+---
+
+## partial — Function Customization
+
+```python
+from functools import partial
+
+# partial — pre-fill some arguments
+def power(base, exp):
+    return base ** exp
+
+square = partial(power, exp=2)   # exp=2 fixed
+cube   = partial(power, exp=3)
+
+square(5)   # 25
+cube(3)     # 27
+square(10)  # 100
+
+# Real examples
+import operator
+
+double  = partial(operator.mul, 2)
+add_ten = partial(operator.add, 10)
+double(5)    # 10
+add_ten(5)   # 15
+
+# sorted এ key function
+from functools import partial
+sort_by_key = partial(sorted, key=lambda x: x[1])
+sort_by_key([("a", 3), ("b", 1), ("c", 2)])
+# [('b', 1), ('c', 2), ('a', 3)]
+
+# Partial ও method
+class Logger:
+    def log(self, level: str, message: str) -> None:
+        print(f"[{level}] {message}")
+
+logger = Logger()
+info  = partial(logger.log, "INFO")
+error = partial(logger.log, "ERROR")
+info("Server started")    # [INFO] Server started
+error("Connection failed") # [ERROR] Connection failed
+```
+
+---
+
+## reduce — Cumulative Operation
+
+```python
+from functools import reduce
+
+# reduce(func, iterable, initializer=None)
+# func(accumulated, current_item)
+
+nums = [1, 2, 3, 4, 5]
+
+# Sum
+reduce(lambda acc, x: acc + x, nums)    # 15
+
+# Product
+reduce(lambda acc, x: acc * x, nums)    # 120
+
+# Max
+reduce(lambda a, b: a if a > b else b, nums)   # 5
+
+# With initial value
+reduce(lambda acc, x: acc + x, nums, 100)   # 115
+
+# Flatten nested list
+nested = [[1, 2], [3, 4], [5, 6]]
+reduce(lambda acc, x: acc + x, nested, [])
+# [1, 2, 3, 4, 5, 6]
+
+# compose functions
+def compose(*funcs):
+    return reduce(lambda f, g: lambda x: f(g(x)), funcs)
+
+pipeline = compose(str.upper, str.strip, lambda s: s + "!")
+pipeline("  hello  ")   # "  HELLO  !" (right to left)
+```
+
+---
+
+## wraps — Metadata Preservation
+
+```python
+import functools
+
+def my_decorator(func):
+    @functools.wraps(func)        # সবসময় দাও
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    return wrapper
+
+@my_decorator
+def greet(name: str) -> str:
+    """Greet someone."""
+    return f"Hello, {name}"
+
+greet.__name__     # "greet"          (not "wrapper")
+greet.__doc__      # "Greet someone."
+greet.__module__   # original module
+greet.__wrapped__  # original function (unwrap করা যায়)
+```
+
+---
+
+## cached_property — Instance Caching
+
+```python
+from functools import cached_property
+
+class Circle:
+    def __init__(self, radius: float):
+        self.radius = radius
+
+    @cached_property
+    def area(self) -> float:
+        """First access এ compute হয়, তারপর cache হয়"""
+        import math
+        print("Computing area...")
+        return math.pi * self.radius ** 2
+
+c = Circle(5)
+c.area    # Computing area... → 78.54
+c.area    # (no computation) → 78.54 (cached)
+
+# Note: radius change হলে cache invalidate হয় না!
+# Mutable class এ সতর্ক থাকো
+```
+
+---
+
+## total_ordering — Comparison Methods
+
+```python
+from functools import total_ordering
+
+@total_ordering
+class Student:
+    def __init__(self, name: str, gpa: float):
+        self.name = name
+        self.gpa  = gpa
+
+    def __eq__(self, other) -> bool:
+        return self.gpa == other.gpa
+
+    def __lt__(self, other) -> bool:
+        return self.gpa < other.gpa
+
+    # @total_ordering automatically generates:
+    # __le__, __gt__, __ge__ from __eq__ and __lt__
+
+students = [Student("Rahim", 3.8), Student("Karim", 3.5)]
+min(students).name   # "Karim"
+max(students).name   # "Rahim"
+sorted(students)     # sorted by gpa
+```

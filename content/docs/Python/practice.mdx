@@ -1,0 +1,401 @@
+---
+title: Practice
+description: Python Practice Problems — সব topics মিলিয়ে problems, Beginner থেকে Advanced
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+<Callout type="info" title="এই page এ আছে">
+  Basics, Decorators, Recursion, OOP, Regex, JSON — সব topics মিলিয়ে
+  real-world style problems। প্রতিটায় hints ও solutions আছে।
+</Callout>
+
+---
+
+## Basics
+
+**B1. Type Analyzer**
+```python
+def analyze(data):
+    """data কে analyze করো — type, length/size, nested কিনা, সব unique values"""
+    pass
+
+analyze([1, 2, 2, 3])     # type: list, len: 4, unique: 3
+analyze({"a": 1, "b": 2}) # type: dict, keys: 2
+analyze("Hello World")    # type: str, len: 11, words: 2
+```
+
+**B2. FizzBuzz Advanced**
+```python
+def fizzbuzz(n: int, rules: dict[int, str]) -> list[str]:
+    """Generic FizzBuzz — rules হলো {divisor: word}"""
+    pass
+
+fizzbuzz(15, {3: "Fizz", 5: "Buzz"})
+# ['1', '2', 'Fizz', '4', 'Buzz', 'Fizz', '7', '8', 'Fizz', 'Buzz', '11', 'Fizz', '13', '14', 'FizzBuzz']
+```
+
+<details>
+<summary>Solutions</summary>
+
+```python
+# B1
+def analyze(data):
+    t = type(data).__name__
+    if isinstance(data, (list, tuple)):
+        print(f"type: {t}, len: {len(data)}, unique: {len(set(data))}")
+    elif isinstance(data, dict):
+        print(f"type: dict, keys: {len(data)}")
+    elif isinstance(data, str):
+        print(f"type: str, len: {len(data)}, words: {len(data.split())}")
+
+# B2
+def fizzbuzz(n: int, rules: dict) -> list[str]:
+    result = []
+    for i in range(1, n + 1):
+        word = "".join(v for k, v in sorted(rules.items()) if i % k == 0)
+        result.append(word or str(i))
+    return result
+```
+</details>
+
+---
+
+## Decorators
+
+**D1. Memoize Decorator**
+লেখো `@memoize` decorator যেটা কাজ করবে যেকোনো function এ।
+
+**D2. Type Checker**
+```python
+@enforce_types
+def add(a: int, b: int) -> int:
+    return a + b
+
+add(1, 2)      # 3  ✅
+add(1, "2")    # TypeError: b must be int, got str
+```
+
+**D3. Retry with Exponential Backoff**
+প্রতিটা retry তে delay দ্বিগুণ হবে।
+
+<details>
+<summary>Solutions</summary>
+
+```python
+import functools
+
+# D1
+def memoize(func):
+    cache = {}
+    @functools.wraps(func)
+    def wrapper(*args):
+        if args not in cache:
+            cache[args] = func(*args)
+        return cache[args]
+    wrapper.cache_clear = lambda: cache.clear()
+    return wrapper
+
+@memoize
+def expensive(n):
+    return n * n
+
+# D2
+import inspect
+def enforce_types(func):
+    hints = func.__annotations__
+    params = list(inspect.signature(func).parameters.keys())
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        for param, val in zip(params, args):
+            if param in hints and param != "return":
+                expected = hints[param]
+                if not isinstance(val, expected):
+                    raise TypeError(f"{param} must be {expected.__name__}, got {type(val).__name__}")
+        return func(*args, **kwargs)
+    return wrapper
+
+# D3
+import time
+def retry_exp(max_attempts=3, base_delay=1.0):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            delay = base_delay
+            for i in range(max_attempts):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    if i == max_attempts - 1:
+                        raise
+                    time.sleep(delay)
+                    delay *= 2   # exponential!
+                    print(f"Retry {i+1}, next delay: {delay}s")
+        return wrapper
+    return decorator
+```
+</details>
+
+---
+
+## Recursion
+
+**R1. Merge Sort**
+Recursive merge sort implement করো।
+
+**R2. JSON Path**
+`data["user"]["address"]["city"]` এর মতো dotted path দিয়ে nested dict access করো।
+```python
+get_path(data, "user.address.city")   # "Dhaka"
+set_path(data, "user.address.zip", "1200")
+```
+
+**R3. Expression Evaluator**
+String expression evaluate করো: `"2 + 3 * 4"` → `14`
+
+<details>
+<summary>Solutions</summary>
+
+```python
+# R1 — Merge Sort
+def merge_sort(arr: list) -> list:
+    if len(arr) <= 1:
+        return arr
+    mid   = len(arr) // 2
+    left  = merge_sort(arr[:mid])
+    right = merge_sort(arr[mid:])
+    return merge(left, right)
+
+def merge(left, right):
+    result = []
+    i = j = 0
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]:
+            result.append(left[i]); i += 1
+        else:
+            result.append(right[j]); j += 1
+    return result + left[i:] + right[j:]
+
+merge_sort([38, 27, 43, 3, 9, 82, 10])
+# [3, 9, 10, 27, 38, 43, 82]
+
+# R2 — JSON Path
+def get_path(obj: dict, path: str):
+    keys = path.split(".")
+    for key in keys:
+        if isinstance(obj, dict):
+            obj = obj.get(key)
+        else:
+            return None
+    return obj
+
+def set_path(obj: dict, path: str, value) -> None:
+    keys = path.split(".")
+    for key in keys[:-1]:
+        obj = obj.setdefault(key, {})
+    obj[keys[-1]] = value
+
+data = {"user": {"address": {"city": "Dhaka"}}}
+get_path(data, "user.address.city")   # "Dhaka"
+set_path(data, "user.address.zip", "1200")
+```
+</details>
+
+---
+
+## OOP + Patterns
+
+**O1. Event System**
+```python
+class EventEmitter:
+    """on(event, handler), emit(event, *args), off(event, handler)"""
+    pass
+
+emitter = EventEmitter()
+emitter.on("data", lambda x: print(f"Got: {x}"))
+emitter.on("data", lambda x: print(f"Also: {x}"))
+emitter.emit("data", 42)   # Got: 42 / Also: 42
+```
+
+**O2. Pipeline Builder**
+```python
+class Pipeline:
+    def add(self, step): ...     # method chaining
+    def run(self, data): ...
+
+result = (Pipeline()
+    .add(str.strip)
+    .add(str.lower)
+    .add(lambda s: s.replace(" ", "_"))
+    .run("  Hello World  "))
+# "hello_world"
+```
+
+<details>
+<summary>Solutions</summary>
+
+```python
+# O1
+from collections import defaultdict
+
+class EventEmitter:
+    def __init__(self):
+        self._handlers = defaultdict(list)
+
+    def on(self, event: str, handler):
+        self._handlers[event].append(handler)
+        return self
+
+    def off(self, event: str, handler):
+        self._handlers[event] = [h for h in self._handlers[event] if h != handler]
+        return self
+
+    def emit(self, event: str, *args, **kwargs):
+        for handler in self._handlers[event]:
+            handler(*args, **kwargs)
+        return self
+
+# O2
+class Pipeline:
+    def __init__(self):
+        self._steps = []
+
+    def add(self, step):
+        self._steps.append(step)
+        return self   # method chaining
+
+    def run(self, data):
+        for step in self._steps:
+            data = step(data)
+        return data
+```
+</details>
+
+---
+
+## Regex
+
+**Rx1.** Text থেকে সব `key=value` pairs extract করো (quotes handle করো)।
+```python
+text = 'name="Rahim Ahmed" age=25 city="Dhaka" active=true'
+# {'name': 'Rahim Ahmed', 'age': '25', 'city': 'Dhaka', 'active': 'true'}
+```
+
+**Rx2.** Markdown এর `**bold**`, `*italic*`, `` `code` `` detect করো।
+
+**Rx3.** CSV parser — quotes ভেতরে comma থাকলেও handle করো।
+```
+line = '"Ahmed, Rahim",25,"Dhaka, BD",engineer'
+```
+
+<details>
+<summary>Solutions</summary>
+
+```python
+import re
+
+# Rx1
+def parse_attrs(text: str) -> dict:
+    pattern = r'(?P<key>\w+)=(?:"(?P<quoted>[^"]*)"| (?P<unquoted>\S+))'
+    result = {}
+    for m in re.finditer(r'(\w+)=(?:"([^"]*)"|([\w]+))', text):
+        key   = m.group(1)
+        value = m.group(2) if m.group(2) is not None else m.group(3)
+        result[key] = value
+    return result
+
+# Rx2
+MD_BOLD   = re.compile(r'\*\*(.+?)\*\*')
+MD_ITALIC = re.compile(r'\*(.+?)\*')
+MD_CODE   = re.compile(r'`(.+?)`')
+
+text = "Hello **World** and *Python* with `code`"
+MD_BOLD.findall(text)    # ['World']
+MD_ITALIC.findall(text)  # ['Python']
+MD_CODE.findall(text)    # ['code']
+
+# Rx3
+def parse_csv_line(line: str) -> list[str]:
+    pattern = r'"([^"]*)"| ([^,]+)'
+    return [
+        m.group(1) if m.group(1) is not None else m.group(2).strip()
+        for m in re.finditer(pattern, line)
+    ]
+
+parse_csv_line('"Ahmed, Rahim",25,"Dhaka, BD",engineer')
+# ['Ahmed, Rahim', '25', 'Dhaka, BD', 'engineer']
+```
+</details>
+
+---
+
+## Advanced Combined
+
+**A1. Config Parser**
+INI-style config file parse করো regex দিয়ে:
+```ini
+[database]
+host = localhost
+port = 5432
+
+[app]
+debug = true
+name = MyApp
+```
+
+**A2. Mini Template Engine**
+`{{variable}}` এবং `{{#if condition}}...{{/if}}` support করো।
+
+<details>
+<summary>Solutions</summary>
+
+```python
+import re
+from collections import defaultdict
+
+# A1 — Config Parser
+def parse_ini(text: str) -> dict:
+    config  = defaultdict(dict)
+    section = "default"
+
+    section_re = re.compile(r"^\[(?P<name>\w+)\]$")
+    kv_re      = re.compile(r"^(?P<key>\w+)\s*=\s*(?P<value>.+)$")
+
+    for line in text.strip().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if m := section_re.match(line):
+            section = m.group("name")
+        elif m := kv_re.match(line):
+            config[section][m.group("key")] = m.group("value").strip()
+    return dict(config)
+
+ini = """
+[database]
+host = localhost
+port = 5432
+
+[app]
+debug = true
+name = MyApp
+"""
+parse_ini(ini)
+# {'database': {'host': 'localhost', 'port': '5432'},
+#  'app': {'debug': 'true', 'name': 'MyApp'}}
+
+# A2 — Mini Template Engine
+def render(template: str, context: dict) -> str:
+    # Simple variable substitution
+    result = re.sub(
+        r"\{\{(\w+)\}\}",
+        lambda m: str(context.get(m.group(1), "")),
+        template
+    )
+    return result
+
+render("Hello, {{name}}! You are {{age}} years old.",
+       {"name": "Rahim", "age": 25})
+# "Hello, Rahim! You are 25 years old."
+```
+</details>

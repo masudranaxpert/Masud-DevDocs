@@ -1,0 +1,127 @@
+---
+title: Overview
+description: Python 3.14 — October 2025 latest release, কী নতুন এলো, কোথা থেকে শুরু করবে
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+## Python 3.14 — October 7, 2025
+
+<Callout type="info" title="Current Latest: Python 3.14.x (Released October 7, 2025)">
+  Python 3.14 latest stable release। Python 3.9 বা পুরনো version এ থাকলে এখনই 3.13 বা 3.14 তে upgrade করো।
+  Python 3.15 alpha চলছে (2026 release planned)।
+</Callout>
+
+<Cards>
+  <Card title="🔤 t-strings (PEP 750)" description="Template strings — f-strings এর safe alternative। SQL injection, XSS attack থেকে protection। Template object return করে।" />
+  <Card title="📝 Deferred Annotations (PEP 649)" description="Type annotations এখন lazy evaluate হয়। Circular import সমস্যা অনেকটা কমে গেছে।" />
+  <Card title="🔄 Free-threaded Mode (PEP 703)" description="GIL ছাড়া Python। True multi-core parallelism। Phase 2 — officially supported but optional।" />
+  <Card title="🏎️ Tail-call Interpreter" description="New CPython interpreter — hot code path optimize করে। Profile-guided optimization recommended।" />
+</Cards>
+
+---
+
+## Python 3.13 + 3.14 — গুরুত্বপূর্ণ নতুন features
+
+```python
+# 1. t-strings (Python 3.14) — PEP 750
+name = "Rahim"
+user_input = "<script>alert('xss')</script>"
+
+# f-string → str হয়ে যায়, dangerous হতে পারে
+f"Hello, {user_input}"   # XSS risk!
+
+# t-string → Template object, safe processing করা যায়
+tmpl = t"Hello, {user_input}"   # Template, not str
+# type(tmpl) → string.templatelib.Template
+
+# 2. match/case (Python 3.10+) — Pattern matching
+match command.split():
+    case ["go", direction]:
+        print(f"Going {direction}")
+    case ["quit"]:
+        exit()
+
+# 3. Type hints উন্নতি (Python 3.10+)
+def process(x: int | float) -> str:    # Union → | syntax
+    return str(x)
+
+# 4. Exception Groups (Python 3.11+)
+try:
+    raise ExceptionGroup("errors", [
+        ValueError("bad value"),
+        TypeError("bad type"),
+    ])
+except* ValueError as eg:
+    print(f"ValueError: {eg}")
+
+# 5. try/finally control flow warning (Python 3.14)
+# finally block এ return/break/continue → DeprecationWarning now
+```
+
+---
+
+## Install ও Setup
+
+```bash
+# Install
+# Windows/Mac: python.org থেকে 3.14 installer
+# Linux:
+sudo apt install python3.14
+# অথবা pyenv দিয়ে (recommended)
+pyenv install 3.14.0
+pyenv global 3.14.0
+
+# Version check
+python --version    # Python 3.14.x
+
+# Virtual environment (সবসময় use করো!)
+python -m venv .venv
+source .venv/bin/activate     # Linux/Mac
+.venv\Scripts\activate        # Windows
+
+# Package manager
+pip install package_name
+# অথবা uv (faster, recommended in 2025)
+uv pip install package_name
+```
+
+---
+
+## Docs Structure
+
+### Basics — touch করা হয়েছে
+| | Topics |
+|---|---|
+| [Basic](./basic) | variables, types, operators, walrus `:=` |
+| [Strings](./strings) | methods, f-strings, t-strings (3.14) |
+| [Collections](./collections) | list, tuple, dict, set, comprehensions |
+| [Control](./control) | if/else, loops, match/case (3.10+) |
+| [Functions](./functions) | def, *args, **kwargs, scope, lambda |
+
+### Advanced — বেশি focus
+| | Topics |
+|---|---|
+| [OOP](./oop) | class, inheritance, dunder, properties |
+| [**Decorators**](./decorators) | closure anatomy, wraps, stacking, args, class-based |
+| [Generators](./generators) | yield, send, pipeline, memory efficiency |
+| [Iterators](./iterators) | `__iter__`/`__next__`, custom iterator |
+| [Context Managers](./context-managers) | with, `__enter__`/`__exit__`, contextlib |
+| [**Recursion**](./recursion) | base case, memoization, tree, backtracking |
+| [Functional](./functional) | map, filter, reduce, partial, compose |
+| [Exceptions](./exceptions) | custom, chaining, ExceptionGroup (3.11+) |
+| [Typing](./typing) | hints, Protocol, TypeVar, Generic |
+
+### Standard Library Modules
+| | Topics |
+|---|---|
+| [**json**](./json) | parse, dump, encoder/decoder, streaming |
+| [**re**](./re) | regex সম্পূর্ণ — groups, lookahead, flags, named groups |
+| [pathlib](./pathlib) | Path API, copy/move (3.14 নতুন) |
+| [datetime](./datetime) | datetime, timezone, timedelta |
+| [collections](./collections-module) | Counter, defaultdict, deque, OrderedDict |
+| [itertools](./itertools) | chain, product, groupby, combinations |
+| [functools](./functools) | lru_cache, partial, reduce, wraps |
+| [dataclasses](./dataclasses) | dataclass, field, post_init, slots |
+| [**Practice**](./practice) | সব topics মিলিয়ে problems |

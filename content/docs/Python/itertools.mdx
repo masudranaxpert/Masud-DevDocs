@@ -1,0 +1,231 @@
+---
+title: itertools Module
+description: Python itertools — সব functions বিস্তারিত, infinite iterators, combinatorics, filtering
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+## itertools কী?
+
+`itertools` হলো memory-efficient iterator tools এর standard library। সব functions lazy — demand এ একটা একটা করে produce করে।
+
+```python
+import itertools
+```
+
+---
+
+## Infinite Iterators
+
+```python
+# count(start, step) — infinite counting
+for n in itertools.count(1, 2):     # 1, 3, 5, 7, ...
+    if n > 10: break
+    print(n, end=" ")   # → 1 3 5 7 9
+
+# enumerate এর মতো কিন্তু start control করা যায়
+list(zip(itertools.count(100), ['a', 'b', 'c']))
+# → [(100, 'a'), (101, 'b'), (102, 'c')]
+
+# cycle(iterable) — বারবার repeat করো
+colors = itertools.cycle(['🔴', '🟡', '🟢'])
+result = [next(colors) for _ in range(7)]
+# → ['🔴', '🟡', '🟢', '🔴', '🟡', '🟢', '🔴']
+
+# repeat(object, times) — একটা value repeat করো
+list(itertools.repeat(0, 5))   # → [0, 0, 0, 0, 0]
+list(map(pow, range(5), itertools.repeat(2)))  # → [0, 1, 4, 9, 16]
+
+# islice — infinite থেকে slice নাও
+list(itertools.islice(itertools.count(), 5))   # → [0, 1, 2, 3, 4]
+list(itertools.islice(itertools.count(10), 2, 8, 2))  # → [12, 14, 16]
+```
+
+---
+
+## Combinatoric Iterators
+
+<Tabs items={['Combinations', 'Permutations', 'Product', 'Combinations with Replacement']}>
+  <Tab value="Combinations">
+    ```python
+    # C(n, r) — order matters না
+    list(itertools.combinations([1,2,3,4], 2))
+    # → [(1,2),(1,3),(1,4),(2,3),(2,4),(3,4)]
+
+    list(itertools.combinations("ABCD", 3))
+    # → [('A','B','C'),('A','B','D'),('A','C','D'),('B','C','D')]
+
+    # Count: C(4,2) = 6
+    ```
+  </Tab>
+  <Tab value="Permutations">
+    ```python
+    # P(n, r) — order matters
+    list(itertools.permutations([1,2,3], 2))
+    # → [(1,2),(1,3),(2,1),(2,3),(3,1),(3,2)]
+
+    list(itertools.permutations("ABC"))
+    # → [('A','B','C'),('A','C','B'),('B','A','C'),
+    #    ('B','C','A'),('C','A','B'),('C','B','A')]
+
+    # Count: P(3,3) = 6
+    ```
+  </Tab>
+  <Tab value="Product">
+    ```python
+    # Cartesian product
+    list(itertools.product([1,2], ['a','b']))
+    # → [(1,'a'),(1,'b'),(2,'a'),(2,'b')]
+
+    # repeat — same iterable multiple times
+    list(itertools.product([0,1], repeat=3))
+    # → [(0,0,0),(0,0,1),(0,1,0),(0,1,1),(1,0,0),(1,0,1),(1,1,0),(1,1,1)]
+    # All 3-bit binary numbers!
+
+    # Nested loop এর replacement
+    for i, j, k in itertools.product(range(3), repeat=3):
+        pass   # same as 3 nested for loops
+    ```
+  </Tab>
+  <Tab value="Combinations with Replacement">
+    ```python
+    # Combinations with repetition
+    list(itertools.combinations_with_replacement([1,2,3], 2))
+    # → [(1,1),(1,2),(1,3),(2,2),(2,3),(3,3)]
+
+    # Dice rolls (2 dice)
+    list(itertools.combinations_with_replacement(range(1,7), 2))
+    # All unique pair outcomes
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Filtering Iterators
+
+```python
+# takewhile — condition True থাকা পর্যন্ত নাও
+list(itertools.takewhile(lambda x: x < 5, [1, 2, 3, 4, 5, 6, 1]))
+# → [1, 2, 3, 4]  (5 এ stop — পরেরগুলো দেখে না!)
+
+# dropwhile — condition True থাকা পর্যন্ত skip করো
+list(itertools.dropwhile(lambda x: x < 5, [1, 2, 3, 4, 5, 6, 1]))
+# → [5, 6, 1]
+
+# filterfalse — False হলে নাও
+list(itertools.filterfalse(lambda x: x % 2, range(10)))
+# → [0, 2, 4, 6, 8]  (filter() এর opposite)
+
+# compress — selector দিয়ে filter করো
+data = ['a', 'b', 'c', 'd', 'e']
+selector = [1, 0, 1, 0, 1]
+list(itertools.compress(data, selector))
+# → ['a', 'c', 'e']
+```
+
+---
+
+## Grouping ও Slicing
+
+```python
+# groupby — consecutive same-key elements group করো
+data = [
+    {"dept": "IT",  "name": "Alice"},
+    {"dept": "IT",  "name": "Bob"},
+    {"dept": "HR",  "name": "Carol"},
+    {"dept": "HR",  "name": "Dave"},
+    {"dept": "IT",  "name": "Eve"},   # ← IT আবার আসছে!
+]
+
+# Sort করতে হবে আগে
+sorted_data = sorted(data, key=lambda x: x["dept"])
+for dept, employees in itertools.groupby(sorted_data, key=lambda x: x["dept"]):
+    names = [e["name"] for e in employees]
+    print(f"{dept}: {names}")
+# HR: ['Carol', 'Dave']
+# IT: ['Alice', 'Bob', 'Eve']
+
+# islice — lazy slicing
+list(itertools.islice(range(100), 10))          # → [0..9]
+list(itertools.islice(range(100), 5, 15))       # → [5..14]
+list(itertools.islice(range(100), 0, 100, 10))  # → [0,10,20,...90]
+```
+
+---
+
+## Chaining ও Combining
+
+```python
+# chain — multiple iterables একটার মতো
+list(itertools.chain([1,2], [3,4], [5,6]))
+# → [1, 2, 3, 4, 5, 6]
+
+# chain.from_iterable — nested list flatten
+nested = [[1,2], [3,4], [5,6]]
+list(itertools.chain.from_iterable(nested))
+# → [1, 2, 3, 4, 5, 6]
+
+# zip_longest — unequal lengths fill করো
+list(itertools.zip_longest([1,2,3], ['a','b'], fillvalue='?'))
+# → [(1,'a'), (2,'b'), (3,'?')]
+
+# starmap — argument tuples এ function apply করো
+import operator
+list(itertools.starmap(operator.mul, [(2,3), (3,4), (4,5)]))
+# → [6, 12, 20]
+# Same as: [2*3, 3*4, 4*5]
+
+# accumulate — running total
+list(itertools.accumulate([1,2,3,4,5]))           # → [1,3,6,10,15]
+list(itertools.accumulate([1,2,3,4,5], operator.mul))  # → [1,2,6,24,120] (factorial!)
+list(itertools.accumulate([3,1,4,1,5,9,2], max))  # → [3,3,4,4,5,9,9]
+
+# pairwise (Python 3.10+) — consecutive pairs
+list(itertools.pairwise([1,2,3,4,5]))
+# → [(1,2), (2,3), (3,4), (4,5)]
+
+# batched (Python 3.12+) — fixed-size chunks
+list(itertools.batched(range(10), 3))
+# → [(0,1,2), (3,4,5), (6,7,8), (9,)]
+```
+
+---
+
+## Practice Problems
+
+**P1.** `itertools.product` ব্যবহার করে সব 4-digit PIN combinations count করো।
+
+**P2.** একটা list কে sliding window এ process করো — `pairwise` দিয়ে।
+
+**P3.** `groupby` দিয়ে word count করো (consecutive same words group করো)।
+
+<details>
+<summary>Solutions</summary>
+
+```python
+import itertools
+
+# P1
+pins = list(itertools.product(range(10), repeat=4))
+len(pins)   # → 10000
+
+# Unique PINs (no repeated digits):
+unique_pins = list(itertools.permutations(range(10), 4))
+len(unique_pins)   # → 5040
+
+# P2
+data = [1, 3, 6, 10, 15]
+differences = [b - a for a, b in itertools.pairwise(data)]
+# → [2, 3, 4, 5]
+
+# P3
+sentence = "the the the quick brown fox fox"
+words = sentence.split()
+word_count = {
+    word: sum(1 for _ in group)
+    for word, group in itertools.groupby(sorted(words))
+}
+# → {'brown': 1, 'fox': 2, 'quick': 1, 'the': 3}
+```
+</details>

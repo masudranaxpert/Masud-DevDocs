@@ -1,0 +1,499 @@
+---
+title: re (Regex)
+description: Python re module — pattern syntax, groups, lookahead/lookbehind, named groups, flags, real examples
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Regex কী?
+
+Regular Expression — string এ pattern match করার language।
+
+```python
+import re
+
+# সবসময় raw string r"..." ব্যবহার করো — backslash literal রাখে
+pattern = r"\d{4}-\d{2}-\d{2}"   # date pattern: YYYY-MM-DD
+text    = "আজকের date: 2025-10-07"
+
+match = re.search(pattern, text)
+if match:
+    print(match.group())   # "2025-10-07"
+```
+
+---
+
+## Core Functions
+
+```python
+import re
+
+text = "Hello World! Hello Python!"
+
+# re.search() — প্রথম match খোঁজে, যেকোনো position এ
+m = re.search(r"Hello", text)
+m.group()    # "Hello"
+m.start()    # 0
+m.end()      # 5
+m.span()     # (0, 5)
+
+# re.match() — শুধু string এর শুরুতে match করে
+re.match(r"Hello", text)      # Match ✅ (শুরুতে আছে)
+re.match(r"World", text)      # None ✗  (শুরুতে নেই)
+
+# re.fullmatch() — পুরো string match করতে হবে
+re.fullmatch(r"\d+", "12345")    # Match
+re.fullmatch(r"\d+", "123abc")   # None
+
+# re.findall() — সব matches এর list
+re.findall(r"Hello", text)       # ["Hello", "Hello"]
+re.findall(r"\d+", "a1b22c333")  # ["1", "22", "333"]
+
+# re.finditer() — Match objects এর iterator (memory efficient)
+for m in re.finditer(r"Hello", text):
+    print(f"Found at {m.start()}: {m.group()}")
+
+# re.sub() — replace করো
+re.sub(r"Hello", "Hi", text)           # "Hi World! Hi Python!"
+re.sub(r"Hello", "Hi", text, count=1)  # "Hi World! Hello Python!" (max 1)
+
+# re.split() — pattern দিয়ে split
+re.split(r"\s+", "one  two   three")   # ["one", "two", "three"]
+re.split(r"[,;]\s*", "a, b; c,d")      # ["a", "b", "c", "d"]
+
+# re.compile() — pattern reuse করো (faster)
+date_pat = re.compile(r"\d{4}-\d{2}-\d{2}")
+date_pat.findall("Events: 2025-10-07 and 2026-01-01")
+```
+
+---
+
+## Pattern Syntax — সব symbols
+
+<Tabs items={['Characters', 'Quantifiers', 'Anchors', 'Special']}>
+  <Tab value="Characters">
+    ```
+    .       যেকোনো character (newline ছাড়া)
+    \d      digit: [0-9]
+    \D      non-digit: [^0-9]
+    \w      word char: [a-zA-Z0-9_]
+    \W      non-word
+    \s      whitespace: [ \t\n\r\f\v]
+    \S      non-whitespace
+    \b      word boundary
+    \B      non-word boundary
+
+    [abc]   a, b, বা c
+    [a-z]   lowercase a থেকে z
+    [A-Z]   uppercase
+    [0-9]   digits
+    [^abc]  NOT a, b, বা c (negation)
+    [a-zA-Z0-9_]  word chars (same as \w)
+
+    # Special chars escape করো
+    \.      literal dot
+    \*      literal asterisk
+    \(  \)  literal parentheses
+    \d+     one or more digits
+    ```
+  </Tab>
+  <Tab value="Quantifiers">
+    ```
+    *       0 বা তার বেশি (greedy)
+    +       1 বা তার বেশি (greedy)
+    ?       0 বা 1 (optional)
+    {n}     exactly n
+    {n,}    n বা তার বেশি
+    {n,m}   n থেকে m পর্যন্ত
+
+    # Greedy vs Non-greedy (Lazy)
+    # Greedy — যতটা সম্ভব বেশি নেয়
+    re.search(r"<.*>", "<b>text</b>").group()   # "<b>text</b>"
+    # Non-greedy (*? +? ??) — যতটা সম্ভব কম নেয়
+    re.search(r"<.*?>", "<b>text</b>").group()  # "<b>"
+
+    *?      non-greedy *
+    +?      non-greedy +
+    ??      non-greedy ?
+    {n,m}?  non-greedy {n,m}
+
+    # Python 3.11+ — Possessive quantifiers (no backtracking)
+    *+      possessive * (faster, no backtrack)
+    ++      possessive +
+    ?+      possessive ?
+    ```
+  </Tab>
+  <Tab value="Anchors">
+    ```
+    ^       string এর শুরু (বা re.MULTILINE এ line শুরু)
+    $       string এর শেষ (বা line শেষ)
+    \A      string এর absolute শুরু (MULTILINE affect করে না)
+    \Z      string এর absolute শেষ
+    \b      word boundary
+    \B      not a word boundary
+
+    # Examples
+    r"^\d+"     string শুরুতে digits
+    r"\d+$"     string শেষে digits
+    r"\bword\b" exact word match (not "password")
+    ```
+  </Tab>
+  <Tab value="Special">
+    ```
+    |       OR alternation:  cat|dog  → "cat" বা "dog"
+    ( )     Capturing group
+    (?: )   Non-capturing group
+    (?P<name> )  Named capturing group
+    (?= )   Positive lookahead
+    (?! )   Negative lookahead
+    (?<= )  Positive lookbehind
+    (?<! )  Negative lookbehind
+    (?>  )  Atomic group (Python 3.11+)
+    \1 \2   Backreference (group 1, 2)
+    (?P=name)  Named backreference
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Groups — Capturing ও Non-capturing
+
+```python
+import re
+
+# Capturing group — ()
+m = re.search(r"(\d{4})-(\d{2})-(\d{2})", "2025-10-07")
+m.group()    # "2025-10-07"  (full match)
+m.group(1)   # "2025"        (group 1)
+m.group(2)   # "10"          (group 2)
+m.group(3)   # "07"          (group 3)
+m.groups()   # ("2025", "10", "07")
+
+# Non-capturing group (?:...) — group করো কিন্তু capture করো না
+m = re.search(r"(?:https?|ftp)://([\w.]+)", "https://example.com")
+m.group(1)   # "example.com"  (group 1 — non-cap group skip হয়)
+
+# findall এ groups থাকলে tuples return করে
+re.findall(r"(\w+)@(\w+)", "a@b.com c@d.org")
+# [('a', 'b'), ('c', 'd')]
+```
+
+---
+
+## Named Groups — (?P<name>...) সবচেয়ে important
+
+```python
+import re
+
+# Named groups — (?P<name>pattern)
+pattern = r"(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})"
+m = re.search(pattern, "Released: 2025-10-07")
+
+# Access by name — much clearer than group(1), group(2)
+m.group("year")    # "2025"
+m.group("month")   # "10"
+m.group("day")     # "07"
+m.groupdict()      # {"year": "2025", "month": "10", "day": "07"}
+
+# Named group এ backreference — (?P=name)
+# Duplicate word detector
+re.search(r"\b(?P<word>\w+)\s+(?P=word)\b", "the the dog")
+# matches "the the" (duplicate)
+
+# sub() এ named group reference
+m = re.sub(
+    r"(?P<day>\d{2})-(?P<month>\d{2})-(?P<year>\d{4})",
+    r"\g<year>-\g<month>-\g<day>",   # \g<name> syntax
+    "07-10-2025"
+)
+# "2025-10-07"
+
+# Real example — log parsing
+log_pattern = re.compile(
+    r"(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})"
+    r"\s+(?P<level>DEBUG|INFO|WARNING|ERROR|CRITICAL)"
+    r"\s+(?P<message>.+)"
+)
+
+log = "2025-10-07 12:30:45 ERROR Failed to connect to database"
+m = log_pattern.search(log)
+if m:
+    print(m.groupdict())
+# {'timestamp': '2025-10-07 12:30:45', 'level': 'ERROR', 'message': 'Failed to connect to database'}
+```
+
+---
+
+## Lookahead ও Lookbehind — Zero-width Assertions
+
+Character consume না করে condition check করে।
+
+```python
+import re
+
+# (?=...) — Positive Lookahead: pattern এর পরে আসে
+# "Isaac" match করো যদি পরে "Asimov" থাকে
+re.search(r"Isaac (?=Asimov)", "Isaac Asimov").group()   # "Isaac "
+re.search(r"Isaac (?=Asimov)", "Isaac Newton")           # None
+
+# (?!...) — Negative Lookahead: pattern এর পরে আসে না
+re.search(r"Isaac (?!Asimov)", "Isaac Newton").group()   # "Isaac "
+re.search(r"Isaac (?!Asimov)", "Isaac Asimov")           # None
+
+# (?<=...) — Positive Lookbehind: pattern এর আগে ছিল
+re.search(r"(?<=\$)\d+", "Price: $100").group()          # "100"
+re.search(r"(?<=USD)\d+", "USD500").group()               # "500"
+
+# (?<!...) — Negative Lookbehind: pattern এর আগে ছিল না
+re.findall(r"(?<!USD)\d+", "USD500 EUR300")              # ["300"]
+
+# Real example — price extraction without currency symbol
+text = "Total: $99.99, Discount: $10.50, Tax: $5.00"
+prices = re.findall(r"(?<=\$)\d+\.\d{2}", text)
+# ["99.99", "10.50", "5.00"]
+
+# Password validation — lookahead দিয়ে multiple conditions
+def validate_password(pwd: str) -> bool:
+    # কমপক্ষে 8 char, একটা uppercase, একটা digit, একটা special char
+    pattern = (
+        r"^"
+        r"(?=.*[A-Z])"          # uppercase আছে
+        r"(?=.*\d)"             # digit আছে
+        r"(?=.*[!@#$%^&*])"    # special char আছে
+        r".{8,}$"               # minimum 8 chars
+    )
+    return bool(re.match(pattern, pwd))
+
+validate_password("Hello@123")   # True
+validate_password("hello123")    # False (no uppercase)
+validate_password("Hello123")    # False (no special char)
+
+# Number formatting — thousand separator
+text = "1234567890"
+formatted = re.sub(r"(?<=\d)(?=(\d{3})+(?!\d))", ",", text)
+# "1,234,567,890"
+```
+
+---
+
+## Flags
+
+```python
+import re
+
+# re.IGNORECASE (re.I) — case-insensitive
+re.findall(r"hello", "Hello HELLO hello", re.I)
+# ["Hello", "HELLO", "hello"]
+
+# re.MULTILINE (re.M) — ^ এবং $ প্রতিটা line এ
+text = "line1\nline2\nline3"
+re.findall(r"^\w+", text, re.M)   # ["line1", "line2", "line3"]
+
+# re.DOTALL (re.S) — . newline ও match করে
+re.search(r"<div>.*</div>", "<div>\ncontent\n</div>", re.S).group()
+# "<div>\ncontent\n</div>"
+
+# re.VERBOSE (re.X) — comments লিখতে পারো pattern এ
+date_pattern = re.compile(r"""
+    (?P<year>  \d{4})   # 4-digit year
+    -                   # separator
+    (?P<month> \d{2})   # 2-digit month
+    -                   # separator
+    (?P<day>   \d{2})   # 2-digit day
+""", re.VERBOSE)
+
+# Multiple flags
+re.compile(r"pattern", re.I | re.M | re.S)
+
+# Inline flags — pattern এর মধ্যে
+re.search(r"(?i)hello", "HELLO")    # (?i) = IGNORECASE
+re.search(r"(?im)^line", text)      # (?im) = IGNORECASE + MULTILINE
+```
+
+---
+
+## sub() — Advanced Replace
+
+```python
+import re
+
+# Basic replace
+re.sub(r"\d+", "NUM", "abc 123 def 456")   # "abc NUM def NUM"
+
+# Backreference এ replace
+# Group 1 = month, Group 2 = day, Group 3 = year
+re.sub(
+    r"(\d{2})/(\d{2})/(\d{4})",
+    r"\3-\1-\2",               # \n = group reference
+    "07/10/2025"
+)  # "2025-07-10"
+
+# Named group reference
+re.sub(
+    r"(?P<last>\w+),\s*(?P<first>\w+)",
+    r"\g<first> \g<last>",     # \g<name>
+    "Ahmed, Rahim"
+)  # "Rahim Ahmed"
+
+# Function হিসেবে replacement
+def double_it(m: re.Match) -> str:
+    return str(int(m.group()) * 2)
+
+re.sub(r"\d+", double_it, "1 apples and 3 oranges")
+# "2 apples and 6 oranges"
+
+# Complex transformation
+def process_tag(m: re.Match) -> str:
+    tag     = m.group("tag")
+    content = m.group("content")
+    return f'<{tag} class="processed">{content.upper()}</{tag}>'
+
+re.sub(
+    r"<(?P<tag>\w+)>(?P<content>[^<]+)</(?P=tag)>",
+    process_tag,
+    "<p>hello</p> <span>world</span>"
+)
+# '<p class="processed">HELLO</p> <span class="processed">WORLD</span>'
+```
+
+---
+
+## Compiled Pattern — Performance
+
+```python
+import re
+
+# ❌ প্রতিবার compile হয় — loop এ slow
+for line in lines:
+    if re.search(r"\d{3}-\d{4}", line):
+        ...
+
+# ✅ একবার compile করো, বারবার use করো
+phone_pat = re.compile(r"\d{3}-\d{4}")
+for line in lines:
+    if phone_pat.search(line):
+        ...
+
+# Compiled pattern এর methods — same as re.*
+phone_pat.search("Call 123-4567")
+phone_pat.findall("123-4567 or 890-1234")
+phone_pat.sub("XXX-XXXX", "Call 123-4567")
+phone_pat.split("123-4567,890-1234")
+```
+
+---
+
+## Real-World Patterns
+
+```python
+import re
+
+# Email validation
+EMAIL = re.compile(
+    r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$"
+)
+EMAIL.match("user@example.com")   # Match ✅
+EMAIL.match("invalid@")           # None
+
+# URL extraction
+URL = re.compile(
+    r"https?://(?:www\.)?[-\w@:%_+.~#?&/=]+"
+)
+URL.findall("Visit https://example.com or http://test.org")
+
+# BD phone number
+BD_PHONE = re.compile(r"(?:\+?880|0)1[3-9]\d{8}")
+BD_PHONE.search("Call 01712345678")
+
+# IP address
+IP = re.compile(
+    r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}"
+    r"(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b"
+)
+IP.findall("IPs: 192.168.1.1, 10.0.0.255, 999.0.0.1")
+# ["192.168.1.1", "10.0.0.255"]  (999.x.x.x invalid)
+
+# HTML tag strip (simple — use html.parser for production)
+TAGS = re.compile(r"<[^>]+>")
+TAGS.sub("", "<p>Hello <b>World</b>!</p>")  # "Hello World!"
+
+# Extract key=value pairs
+KV = re.compile(r"(?P<key>\w+)=(?P<value>[^\s,]+)")
+for m in KV.finditer("name=Rahim, age=25, city=Dhaka"):
+    print(f"{m.group('key')}: {m.group('value')}")
+```
+
+---
+
+## Practice Problems
+
+**P1.** একটা text থেকে সব email address extract করো।
+
+**P2.** Date format DD/MM/YYYY কে YYYY-MM-DD তে convert করো (`re.sub` দিয়ে)।
+
+**P3.** Log file থেকে শুধু ERROR level এর lines বের করো এবং message parse করো।
+
+**P4.** Password validator — কমপক্ষে 8 char, uppercase, lowercase, digit, special char।
+
+**P5.** Text থেকে duplicate consecutive words বের করো ("the the fox" → "the")।
+
+<details>
+<summary>Solutions</summary>
+
+```python
+import re
+
+# P1 — Email extraction
+def extract_emails(text: str) -> list[str]:
+    pattern = r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}"
+    return re.findall(pattern, text)
+
+extract_emails("Contact rahim@example.com or karim@test.org for help")
+# ['rahim@example.com', 'karim@test.org']
+
+# P2 — Date reformat
+def reformat_date(text: str) -> str:
+    return re.sub(
+        r"(?P<day>\d{2})/(?P<month>\d{2})/(?P<year>\d{4})",
+        r"\g<year>-\g<month>-\g<day>",
+        text
+    )
+reformat_date("Event on 07/10/2025 ends 08/10/2025")
+# "Event on 2025-10-07 ends 2025-10-08"
+
+# P3 — Log parser
+log_pat = re.compile(
+    r"(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})"
+    r"\s+(?P<level>DEBUG|INFO|WARNING|ERROR|CRITICAL)"
+    r"\s+(?P<msg>.+)"
+)
+def parse_errors(log_text: str) -> list[dict]:
+    results = []
+    for m in log_pat.finditer(log_text):
+        if m.group("level") == "ERROR":
+            results.append(m.groupdict())
+    return results
+
+# P4 — Password validator
+def validate_pwd(pwd: str) -> dict:
+    checks = {
+        "length":    bool(re.search(r".{8,}", pwd)),
+        "uppercase": bool(re.search(r"[A-Z]", pwd)),
+        "lowercase": bool(re.search(r"[a-z]", pwd)),
+        "digit":     bool(re.search(r"\d", pwd)),
+        "special":   bool(re.search(r"[!@#$%^&*(),.?\":{}|<>]", pwd)),
+    }
+    checks["valid"] = all(checks.values())
+    return checks
+
+# P5 — Duplicate consecutive words
+def find_duplicates(text: str) -> list[str]:
+    pattern = r"\b(?P<word>\w+)\s+(?P=word)\b"
+    return [m.group("word") for m in re.finditer(pattern, text, re.I)]
+
+find_duplicates("the the quick brown fox fox jumped")
+# ['the', 'fox']
+```
+</details>

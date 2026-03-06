@@ -1,0 +1,545 @@
+---
+title: Decorators
+description: Python Decorators — কীভাবে কাজ করে, wraps, args/kwargs, stacking, class decorator, real-world examples
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+
+## Decorator কী?
+
+Decorator হলো একটা function যেটা **আরেকটা function কে input হিসেবে নেয়**, তাকে modify করে বা wrap করে, এবং নতুন function return করে — **original function পরিবর্তন না করে**।
+
+```python
+def my_decorator(func):
+    def wrapper():
+        print("Before function call")
+        func()
+        print("After function call")
+    return wrapper
+
+def say_hello():
+    print("Hello!")
+
+# Without @ syntax:
+say_hello = my_decorator(say_hello)
+say_hello()
+# → Before function call
+# → Hello!
+# → After function call
+
+# @ syntax — এটাই decorator syntax
+@my_decorator
+def say_hello():
+    print("Hello!")
+
+# এই দুটো exactly same
+```
+
+---
+
+## Step by Step বোঝো
+
+<Steps>
+  <Step>
+    ### Python এ functions first-class objects
+
+    Functions কে variable এ assign করা যায়, argument হিসেবে pass করা যায়, return করা যায়।
+
+    ```python
+    def greet():
+        return "Hello!"
+
+    # Function variable এ রাখো
+    my_func = greet
+    my_func()   # → "Hello!"
+
+    # Function argument হিসেবে pass করো
+    def execute(func):
+        return func()
+
+    execute(greet)   # → "Hello!"
+
+    # Function return করো
+    def get_greeter():
+        def greet():
+            return "Hello!"
+        return greet   # greet কে return করছে, call না
+
+    greeter = get_greeter()
+    greeter()   # → "Hello!"
+    ```
+  </Step>
+
+  <Step>
+    ### Nested function দিয়ে wrapper
+
+    ```python
+    def decorator(func):
+        # func কে "remember" করে রাখছে — closure!
+        def wrapper():
+            print("Before")
+            result = func()   # original function call
+            print("After")
+            return result     # result return করো!
+        return wrapper        # wrapper function return করছে, call না
+    ```
+  </Step>
+
+  <Step>
+    ### @ syntax — syntactic sugar
+
+    ```python
+    @decorator
+    def my_function():
+        return "I'm decorated"
+
+    # এটা exactly নিচেরটার সমান:
+    def my_function():
+        return "I'm decorated"
+    my_function = decorator(my_function)
+    ```
+  </Step>
+</Steps>
+
+---
+
+## *args, **kwargs সহ Decorator
+
+যেকোনো function এ কাজ করার জন্য `*args, **kwargs` দিতেই হবে।
+
+```python
+import functools
+
+def decorator(func):
+    @functools.wraps(func)   # ← এটা সবসময় দাও! নিচে কেন বলছি
+    def wrapper(*args, **kwargs):
+        print(f"Calling {func.__name__}")
+        result = func(*args, **kwargs)   # সব arguments pass করো
+        print(f"Done {func.__name__}")
+        return result
+    return wrapper
+
+@decorator
+def add(a, b):
+    return a + b
+
+@decorator
+def greet(name, greeting="Hello"):
+    return f"{greeting}, {name}!"
+
+add(3, 4)          # → 7
+greet("Rahim")     # → "Hello, Rahim!"
+greet("Rahim", greeting="Hi")
+```
+
+---
+
+## functools.wraps — কেন দরকার?
+
+```python
+def bad_decorator(func):
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    return wrapper
+
+def good_decorator(func):
+    @functools.wraps(func)   # ← metadata preserve করে
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    return wrapper
+
+@bad_decorator
+def my_func():
+    """This is my function's docstring"""
+    pass
+
+@good_decorator
+def my_func2():
+    """This is my function's docstring"""
+    pass
+
+# wraps ছাড়া — metadata হারিয়ে যায়!
+print(my_func.__name__)   # → "wrapper"  ← ভুল!
+print(my_func.__doc__)    # → None       ← হারিয়ে গেছে!
+
+# wraps সহ — metadata থাকে
+print(my_func2.__name__)  # → "my_func2" ← সঠিক
+print(my_func2.__doc__)   # → "This is my function's docstring"
+```
+
+<Callout type="warn" title="@functools.wraps সবসময় দাও">
+  Debug করতে গেলে `__name__`, `__doc__`, `__module__` দরকার হয়।
+  Testing framework গুলো metadata দেখে।
+  `wraps` ছাড়া সব decorators এ এই information হারিয়ে যায়।
+</Callout>
+
+---
+
+## Arguments নেওয়া Decorator
+
+Decorator নিজে argument নিলে আরেকটা layer লাগে।
+
+```python
+import functools
+import time
+
+def retry(times=3, delay=1.0):
+    """times বার retry করো, প্রতিবার delay seconds wait করো"""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(1, times + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    print(f"Attempt {attempt}/{times} failed: {e}")
+                    if attempt < times:
+                        time.sleep(delay)
+            raise last_exception
+        return wrapper
+    return decorator
+
+# ব্যবহার
+@retry(times=3, delay=0.5)
+def fetch_data(url):
+    # network call যেটা fail করতে পারে
+    import random
+    if random.random() < 0.7:
+        raise ConnectionError("Network error")
+    return "Data"
+
+fetch_data("http://example.com")
+```
+
+**কেন তিনটা layer?**
+```python
+# @retry(times=3) এর মানে:
+# step 1: retry(times=3) → decorator function return করে
+# step 2: decorator(fetch_data) → wrapper function return করে
+# step 3: fetch_data("url") → wrapper("url") চলে
+```
+
+---
+
+## Stacking Decorators
+
+```python
+import functools
+
+def bold(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return f"<b>{func(*args, **kwargs)}</b>"
+    return wrapper
+
+def italic(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return f"<i>{func(*args, **kwargs)}</i>"
+    return wrapper
+
+def uppercase(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs).upper()
+    return wrapper
+
+@bold
+@italic
+@uppercase
+def greet(name):
+    return f"hello, {name}"
+
+greet("rahim")
+# Step 1: uppercase → "HELLO, RAHIM"
+# Step 2: italic   → "<i>HELLO, RAHIM</i>"
+# Step 3: bold     → "<b><i>HELLO, RAHIM</i></b>"
+
+# নিচে থেকে উপরে apply হয়!
+# @bold(@italic(@uppercase(greet)))
+```
+
+---
+
+## Real-world Decorators
+
+<Tabs items={['Timer', 'Cache', 'Auth Check', 'Rate Limit']}>
+  <Tab value="Timer">
+    ```python
+    import functools
+    import time
+
+    def timer(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            start = time.perf_counter()
+            result = func(*args, **kwargs)
+            elapsed = time.perf_counter() - start
+            print(f"{func.__name__} took {elapsed:.4f}s")
+            return result
+        return wrapper
+
+    @timer
+    def slow_function():
+        time.sleep(1)
+        return "done"
+
+    slow_function()
+    # → slow_function took 1.0012s
+    ```
+  </Tab>
+  <Tab value="Cache">
+    ```python
+    # Simple manual cache
+    def cache(func):
+        cached = {}
+        @functools.wraps(func)
+        def wrapper(*args):
+            if args not in cached:
+                cached[args] = func(*args)
+            return cached[args]
+        return wrapper
+
+    @cache
+    def fibonacci(n):
+        if n <= 1:
+            return n
+        return fibonacci(n-1) + fibonacci(n-2)
+
+    # Built-in version — এটাই ব্যবহার করো
+    from functools import lru_cache
+
+    @lru_cache(maxsize=128)
+    def fibonacci(n):
+        if n <= 1:
+            return n
+        return fibonacci(n-1) + fibonacci(n-2)
+    ```
+  </Tab>
+  <Tab value="Auth Check">
+    ```python
+    def require_auth(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            # current_user global বা context থেকে আসে
+            if not current_user.is_authenticated:
+                raise PermissionError("Login required")
+            return func(*args, **kwargs)
+        return wrapper
+
+    def require_role(role):
+        def decorator(func):
+            @functools.wraps(func)
+            def wrapper(*args, **kwargs):
+                if not current_user.has_role(role):
+                    raise PermissionError(f"Role '{role}' required")
+                return func(*args, **kwargs)
+            return wrapper
+        return decorator
+
+    @require_auth
+    @require_role("admin")
+    def delete_user(user_id):
+        # শুধু authenticated admin access করতে পারবে
+        pass
+    ```
+  </Tab>
+  <Tab value="Rate Limit">
+    ```python
+    import time
+    from collections import deque
+
+    def rate_limit(calls_per_second):
+        min_interval = 1.0 / calls_per_second
+        call_times = deque()
+
+        def decorator(func):
+            @functools.wraps(func)
+            def wrapper(*args, **kwargs):
+                now = time.perf_counter()
+                # পুরনো calls পরিষ্কার করো
+                while call_times and now - call_times[0] > 1.0:
+                    call_times.popleft()
+
+                if len(call_times) >= calls_per_second:
+                    sleep_time = call_times[0] + 1.0 - now
+                    if sleep_time > 0:
+                        time.sleep(sleep_time)
+
+                call_times.append(time.perf_counter())
+                return func(*args, **kwargs)
+            return wrapper
+        return decorator
+
+    @rate_limit(calls_per_second=2)
+    def api_call(endpoint):
+        print(f"Calling {endpoint}")
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Class-based Decorator
+
+```python
+import functools
+
+class Retry:
+    """Class হিসেবে decorator"""
+    def __init__(self, times=3):
+        self.times = times
+
+    def __call__(self, func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            for attempt in range(1, self.times + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    if attempt == self.times:
+                        raise
+                    print(f"Attempt {attempt} failed: {e}")
+        return wrapper
+
+@Retry(times=3)
+def unstable_function():
+    raise ValueError("Oops")
+
+# Class instance তে decorator
+class MyClass:
+    @staticmethod
+    def static_method():
+        pass
+
+    @classmethod
+    def class_method(cls):
+        pass
+
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, v):
+        self._value = v
+```
+
+---
+
+## Decorator কীভাবে লেখা হয় — Template
+
+```python
+import functools
+
+# Template — সব decorators এই structure follow করে
+
+# Simple decorator
+def my_decorator(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        # before
+        result = func(*args, **kwargs)
+        # after
+        return result
+    return wrapper
+
+# Decorator with arguments
+def my_decorator_with_args(arg1, arg2="default"):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            # arg1, arg2 ব্যবহার করতে পারো
+            result = func(*args, **kwargs)
+            return result
+        return wrapper
+    return decorator
+```
+
+---
+
+## Practice Problems
+
+**P1.** একটা `@validate_positive` decorator লিখো যেটা function এর সব numeric arguments positive কিনা check করবে।
+
+**P2.** `@log_calls` decorator লিখো যেটা function name, arguments, এবং return value log করবে।
+
+**P3.** `@deprecated(message)` decorator লিখো যেটা function call করলে `DeprecationWarning` দেবে।
+
+**P4.** `@singleton` decorator লিখো — class এর শুধু একটাই instance তৈরি হবে।
+
+<details>
+<summary>Solutions</summary>
+
+```python
+import functools
+import warnings
+
+# P1
+def validate_positive(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        for i, arg in enumerate(args):
+            if isinstance(arg, (int, float)) and arg <= 0:
+                raise ValueError(f"Argument {i+1} must be positive, got {arg}")
+        for key, val in kwargs.items():
+            if isinstance(val, (int, float)) and val <= 0:
+                raise ValueError(f"'{key}' must be positive, got {val}")
+        return func(*args, **kwargs)
+    return wrapper
+
+@validate_positive
+def calculate_area(width, height):
+    return width * height
+
+# P2
+def log_calls(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        args_str = ", ".join(repr(a) for a in args)
+        kwargs_str = ", ".join(f"{k}={v!r}" for k, v in kwargs.items())
+        all_args = ", ".join(filter(None, [args_str, kwargs_str]))
+        print(f"→ Calling {func.__name__}({all_args})")
+        result = func(*args, **kwargs)
+        print(f"← {func.__name__} returned {result!r}")
+        return result
+    return wrapper
+
+# P3
+def deprecated(message="This function is deprecated"):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            warnings.warn(
+                f"{func.__name__} is deprecated: {message}",
+                DeprecationWarning,
+                stacklevel=2
+            )
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+# P4
+def singleton(cls):
+    instances = {}
+    @functools.wraps(cls)
+    def get_instance(*args, **kwargs):
+        if cls not in instances:
+            instances[cls] = cls(*args, **kwargs)
+        return instances[cls]
+    return get_instance
+
+@singleton
+class Database:
+    def __init__(self):
+        print("Connecting to database...")
+
+db1 = Database()   # → "Connecting to database..."
+db2 = Database()   # → (no print)
+print(db1 is db2)  # → True
+```
+</details>

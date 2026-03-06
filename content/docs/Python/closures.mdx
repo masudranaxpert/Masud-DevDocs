@@ -1,0 +1,322 @@
+---
+title: Closures
+description: Python Closures — nested function, free variables, nonlocal, factory functions, কখন ব্যবহার করবে
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Closure কী?
+
+Closure হলো একটা nested function যেটা তার **enclosing scope** এর variables কে **remember** করে রাখে — enclosing function শেষ হওয়ার পরেও।
+
+```python
+def outer(x):
+    # x is a free variable — outer এর local
+    def inner(y):
+        return x + y   # x কে "remember" করছে
+    return inner       # inner function return করছে
+
+add5 = outer(5)   # outer(5) শেষ হয়ে গেছে, কিন্তু x=5 "জীবিত"
+add5(3)   # → 8   (x=5 এখনো আছে!)
+add5(10)  # → 15
+
+add10 = outer(10)
+add10(3)  # → 13  (আলাদা closure, আলাদা x=10)
+```
+
+**Closure এর তিনটা শর্ত:**
+1. Nested function আছে
+2. Inner function, outer এর variable ব্যবহার করছে
+3. Outer function, inner function কে return করছে
+
+---
+
+## Free Variables দেখো
+
+```python
+def make_multiplier(factor):
+    def multiply(n):
+        return n * factor   # factor = free variable
+    return multiply
+
+double = make_multiplier(2)
+triple = make_multiplier(3)
+
+# Closure inspect করো
+print(double.__closure__)   # → (<cell at 0x...: int object at 0x...>,)
+print(double.__code__.co_freevars)  # → ('factor',)
+
+# Cell contents দেখো
+print(double.__closure__[0].cell_contents)  # → 2
+print(triple.__closure__[0].cell_contents)  # → 3
+
+double(5)   # → 10
+triple(5)   # → 15
+```
+
+---
+
+## nonlocal — Free Variable Modify করো
+
+```python
+# ❌ read করা যায় কিন্তু modify করা যায় না (default)
+def make_counter():
+    count = 0
+    def increment():
+        count += 1     # UnboundLocalError!
+        return count
+    return increment
+
+# ✅ nonlocal দিয়ে modify করো
+def make_counter():
+    count = 0
+    def increment():
+        nonlocal count   # ← enclosing scope এর count modify করবো
+        count += 1
+        return count
+    return increment
+
+counter = make_counter()
+counter()   # → 1
+counter()   # → 2
+counter()   # → 3
+
+# ভিন্ন counter instance — independent state
+counter_a = make_counter()
+counter_b = make_counter()
+counter_a()   # → 1
+counter_a()   # → 2
+counter_b()   # → 1   (counter_a এর সাথে কোনো সম্পর্ক নেই)
+```
+
+---
+
+## Factory Functions — Closure এর সেরা use case
+
+```python
+# Function factory — parameter দিয়ে customized functions তৈরি করো
+def make_validator(min_val, max_val):
+    def validate(value):
+        if not isinstance(value, (int, float)):
+            return False, "Must be a number"
+        if value < min_val:
+            return False, f"Must be >= {min_val}"
+        if value > max_val:
+            return False, f"Must be <= {max_val}"
+        return True, "Valid"
+    return validate
+
+validate_age     = make_validator(0, 150)
+validate_percent = make_validator(0, 100)
+validate_score   = make_validator(0, 10)
+
+validate_age(25)       # → (True, 'Valid')
+validate_age(200)      # → (False, 'Must be <= 150')
+validate_percent(75)   # → (True, 'Valid')
+
+# Power function factory
+def make_power(exp):
+    def power(base):
+        return base ** exp
+    return power
+
+square = make_power(2)
+cube   = make_power(3)
+fourth = make_power(4)
+
+square(5)   # → 25
+cube(3)     # → 27
+
+# Logger factory
+def make_logger(prefix):
+    import time
+    def log(message):
+        timestamp = time.strftime("%H:%M:%S")
+        print(f"[{prefix}] {timestamp}: {message}")
+    return log
+
+info_log  = make_logger("INFO")
+error_log = make_logger("ERROR")
+debug_log = make_logger("DEBUG")
+
+info_log("Server started")    # → [INFO] 14:30:00: Server started
+error_log("Connection failed") # → [ERROR] 14:30:01: Connection failed
+```
+
+---
+
+## Classic Mistake — Loop Closure Trap
+
+```python
+# ❌ Famous Python closure bug
+functions = []
+for i in range(5):
+    def f():
+        return i   # i একটাই — শেষ value capture করে!
+    functions.append(f)
+
+# সব function শেষ i (=4) return করবে!
+print([f() for f in functions])  # → [4, 4, 4, 4, 4] ← বাগ!
+
+# ✅ Fix 1 — default argument দিয়ে bind করো
+functions = []
+for i in range(5):
+    def f(x=i):   # ← i কে default argument হিসেবে bind
+        return x
+    functions.append(f)
+
+print([f() for f in functions])  # → [0, 1, 2, 3, 4] ✓
+
+# ✅ Fix 2 — factory function ব্যবহার করো
+def make_f(val):
+    def f():
+        return val   # val এখন আলাদা closure
+    return f
+
+functions = [make_f(i) for i in range(5)]
+print([f() for f in functions])  # → [0, 1, 2, 3, 4] ✓
+
+# ✅ Fix 3 — lambda এও same
+functions = [lambda x=i: x for i in range(5)]
+print([f() for f in functions])  # → [0, 1, 2, 3, 4] ✓
+```
+
+<Callout type="warn" title="Loop Closure Trap — সবচেয়ে common bug">
+  Loop এ closure তৈরি করলে সব function একই variable এর reference রাখে।
+  Loop শেষ হওয়ার পরে call করলে সব শেষ value return করে।
+  Default argument দিয়ে বা factory function দিয়ে fix করো।
+</Callout>
+
+---
+
+## Stateful Closure vs Class
+
+```python
+# Closure দিয়ে state রাখা
+def make_account(initial_balance):
+    balance = initial_balance
+
+    def deposit(amount):
+        nonlocal balance
+        balance += amount
+        return balance
+
+    def withdraw(amount):
+        nonlocal balance
+        if amount > balance:
+            raise ValueError("Insufficient funds")
+        balance -= amount
+        return balance
+
+    def get_balance():
+        return balance
+
+    return {"deposit": deposit, "withdraw": withdraw, "balance": get_balance}
+
+acc = make_account(1000)
+acc["deposit"](500)     # → 1500
+acc["withdraw"](200)    # → 1300
+acc["balance"]()        # → 1300
+
+# Class দিয়ে — more readable, method হলে class prefer করো
+class Account:
+    def __init__(self, balance):
+        self._balance = balance
+
+    def deposit(self, amount):
+        self._balance += amount
+        return self._balance
+
+    def withdraw(self, amount):
+        if amount > self._balance:
+            raise ValueError("Insufficient funds")
+        self._balance -= amount
+        return self._balance
+
+    @property
+    def balance(self):
+        return self._balance
+```
+
+<Callout type="info" title="Closure কখন, Class কখন?">
+  Closure — simple state, factory functions, callbacks।
+  Class — complex state, multiple methods, inheritance দরকার হলে।
+</Callout>
+
+---
+
+## Practice Problems
+
+**P1.** একটা closure factory লিখো `make_adder(n)` যেটা n যোগ করে এমন function return করবে।
+
+**P2.** `make_accumulator()` লিখো — প্রতিবার call করলে আগের সব value এর sum return করবে।
+
+**P3.** Loop closure bug fix করো:
+```python
+buttons = []
+for label in ["Click A", "Click B", "Click C"]:
+    def on_click():
+        print(f"Clicked: {label}")
+    buttons.append(on_click)
+
+# সব বলছে "Clicked: Click C" — fix করো
+```
+
+**P4.** `make_average()` লিখো — running average track করবে।
+
+<details>
+<summary>Solutions</summary>
+
+```python
+# P1
+def make_adder(n):
+    def add(x):
+        return x + n
+    return add
+
+add5 = make_adder(5)
+add5(10)   # → 15
+
+# P2
+def make_accumulator():
+    total = 0
+    def accumulate(value):
+        nonlocal total
+        total += value
+        return total
+    return accumulate
+
+acc = make_accumulator()
+acc(10)   # → 10
+acc(20)   # → 30
+acc(5)    # → 35
+
+# P3
+buttons = []
+for label in ["Click A", "Click B", "Click C"]:
+    def on_click(lbl=label):   # default arg দিয়ে bind
+        print(f"Clicked: {lbl}")
+    buttons.append(on_click)
+
+# অথবা factory:
+def make_handler(label):
+    def on_click():
+        print(f"Clicked: {label}")
+    return on_click
+
+buttons = [make_handler(lbl) for lbl in ["Click A", "Click B", "Click C"]]
+
+# P4
+def make_average():
+    values = []
+    def average(value):
+        values.append(value)
+        return sum(values) / len(values)
+    return average
+
+avg = make_average()
+avg(10)   # → 10.0
+avg(20)   # → 15.0
+avg(30)   # → 20.0
+```
+</details>
