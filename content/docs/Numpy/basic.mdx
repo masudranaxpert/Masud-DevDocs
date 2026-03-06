@@ -1,0 +1,269 @@
+---
+title: Basic
+description: NumPy ndarray — array তৈরি, dtype, attributes, সব ভুল
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## ndarray কী?
+
+NumPy এর মূল হলো `ndarray` — N-dimensional array। এটা একটা **fixed-size, same-type** এর elements এর grid।
+
+```python
+import numpy as np
+
+a = np.array([1, 2, 3, 4, 5])
+
+print(a.ndim)   # → 1       (dimensions সংখ্যা)
+print(a.shape)  # → (5,)    (প্রতিটা dimension এর size)
+print(a.size)   # → 5       (মোট elements)
+print(a.dtype)  # → int64   (element type)
+print(a.nbytes) # → 40      (মোট memory bytes)
+print(a.itemsize) # → 8     (একটা element এর bytes)
+```
+
+---
+
+## Array তৈরি করার সব উপায়
+
+<Tabs items={['List থেকে', 'Built-in Functions', 'Range Functions', 'Random']}>
+  <Tab value="List থেকে">
+    ```python
+    # 1D
+    a = np.array([1, 2, 3])
+    # → array([1, 2, 3])
+
+    # 2D (matrix)
+    b = np.array([[1, 2, 3],
+                  [4, 5, 6]])
+    # → shape (2, 3)
+
+    # 3D
+    c = np.array([[[1, 2], [3, 4]],
+                  [[5, 6], [7, 8]]])
+    # → shape (2, 2, 2)
+
+    # dtype specify করো
+    d = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+    e = np.array([1, 2, 3], dtype=np.int16)
+    ```
+  </Tab>
+  <Tab value="Built-in Functions">
+    ```python
+    # সব zeros
+    np.zeros(5)              # → [0. 0. 0. 0. 0.]
+    np.zeros((3, 4))         # → 3×4 zeros matrix
+
+    # সব ones
+    np.ones((2, 3))          # → 2×3 ones
+    np.ones((2, 3), dtype=int)  # integer ones
+
+    # Uninitialized (fast, random garbage values)
+    np.empty((3, 3))
+
+    # constant value
+    np.full((2, 3), 7)       # → সব 7
+    np.full((2, 3), np.pi)   # → সব π
+
+    # Identity matrix
+    np.eye(4)                # → 4×4 identity
+    np.eye(4, dtype=int)
+
+    # আরেকটা array এর মতো shape এ
+    a = np.array([[1, 2], [3, 4]])
+    np.zeros_like(a)         # → same shape, সব 0
+    np.ones_like(a)          # → same shape, সব 1
+    np.full_like(a, 99)      # → same shape, সব 99
+    ```
+  </Tab>
+  <Tab value="Range Functions">
+    ```python
+    # arange — Python range এর মতো
+    np.arange(10)            # → [0 1 2 ... 9]
+    np.arange(2, 10)         # → [2 3 4 ... 9]
+    np.arange(0, 1, 0.1)     # → [0.  0.1 0.2 ... 0.9]
+    np.arange(10, 0, -1)     # → [10 9 8 ... 1]
+
+    # linspace — n টা equally spaced points
+    np.linspace(0, 1, 5)     # → [0.   0.25 0.5  0.75 1.  ]
+    np.linspace(0, 10, 11)   # → [0. 1. 2. ... 10.]
+    np.linspace(0, 1, 5, endpoint=False)  # → শেষ point বাদ
+
+    # logspace — logarithmically spaced
+    np.logspace(0, 2, 5)     # → [1, ~3.16, 10, ~31.6, 100]
+    ```
+
+    <Callout type="warn" title="arange vs linspace — floating point এ সতর্ক">
+      `arange(0, 1, 0.1)` এ floating point error হতে পারে — ঠিক ১০টা নাও পেতে পারো।
+      নির্দিষ্ট সংখ্যক points দরকার হলে `linspace` ব্যবহার করো।
+    </Callout>
+  </Tab>
+  <Tab value="Random">
+    ```python
+    # NumPy 2.x — Generator style (recommended)
+    rng = np.random.default_rng(seed=42)  # reproducible
+
+    rng.integers(0, 10, size=5)      # → [0, 9] এর মধ্যে 5টা int
+    rng.integers(0, 10, size=(3, 3)) # → 3×3 random ints
+    rng.random(size=5)               # → [0, 1) uniformly
+    rng.normal(loc=0, scale=1, size=5)     # standard normal
+    rng.uniform(low=0, high=10, size=5)    # uniform distribution
+    rng.choice([10, 20, 30, 40], size=3)   # random choice
+    rng.shuffle(arr)                        # in-place shuffle
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## dtype — Data Types
+
+```python
+# Integer types
+np.int8     # -128 to 127
+np.int16    # -32,768 to 32,767
+np.int32    # ~ -2 billion to 2 billion
+np.int64    # default int (64-bit)
+
+np.uint8    # 0 to 255 (unsigned — image data)
+np.uint16   # 0 to 65,535
+np.uint32
+np.uint64
+
+# Float types
+np.float16  # 16-bit (machine learning — less memory)
+np.float32  # 32-bit (GPU computation, ML)
+np.float64  # default float (64-bit, double precision)
+
+# Other
+np.bool_    # True/False
+np.complex64
+np.complex128
+np.str_     # fixed-length string (পুরনো)
+# NumPy 2.0+:
+np.dtypes.StringDType()  # variable-length string (নতুন!)
+
+# Check করো
+arr = np.array([1, 2, 3])
+arr.dtype        # → dtype('int64')
+arr.dtype.name   # → 'int64'
+arr.dtype.itemsize # → 8
+```
+
+### dtype কেন গুরুত্বপূর্ণ
+
+```python
+# ❌ ভুল — default int64 দিলে memory বেশি লাগে
+images = np.zeros((1000, 224, 224, 3))          # float64 = 1.2 GB!
+
+# ✅ সঠিক — image data এ float32 বা uint8
+images = np.zeros((1000, 224, 224, 3), dtype=np.float32)   # 600 MB
+images = np.zeros((1000, 224, 224, 3), dtype=np.uint8)     # 150 MB
+
+# dtype convert করো
+arr = np.array([1, 2, 3])
+arr.astype(np.float32)      # float32 এ convert
+arr.astype(np.float64)      # float64
+arr.astype(bool)            # boolean — 0→False, else True
+```
+
+---
+
+## Array Attributes
+
+```python
+a = np.array([[1, 2, 3],
+              [4, 5, 6]])
+
+a.ndim    # → 2          (মাত্রা সংখ্যা)
+a.shape   # → (2, 3)     (rows, cols)
+a.size    # → 6          (মোট elements)
+a.dtype   # → int64      (data type)
+a.nbytes  # → 48         (total bytes = 6 * 8)
+a.T       # → transposed (3, 2) — same data, different view
+a.flat    # → 1D iterator
+a.real    # → real part (complex array এ)
+a.imag    # → imaginary part
+```
+
+---
+
+## Array তৈরির সময় সব ভুল
+
+<Callout title="Beginners এর সব ভুল">
+
+```python
+# ❌ ভুল 1 — mixed types, unexpected dtype
+arr = np.array([1, 2, 3.0])    # → float64! (int + float → float)
+arr = np.array([1, 2, True])   # → int64!  (bool + int → int)
+arr = np.array([1, 'two', 3])  # → '<U21'  (string!)
+
+# ✅ সবসময় dtype specify করো important array এ
+arr = np.array([1, 2, 3], dtype=np.float32)
+
+# ❌ ভুল 2 — list of lists uneven rows
+arr = np.array([[1, 2, 3], [4, 5]])  # → object dtype, not 2D!
+
+# ✅ সব rows same length হতে হবে
+arr = np.array([[1, 2, 3], [4, 5, 6]])  # ✅ proper 2D
+
+# ❌ ভুল 3 — NumPy 2.x এ removed হয়েছে
+a = np.array([1.5])
+scalar = np.float64(a)   # → TypeError in NumPy 2.0!
+
+# ✅ সঠিক scalar extract করো
+scalar = a.item()     # Python scalar
+scalar = a[0]         # NumPy scalar
+scalar = float(a[0])  # Python float
+```
+</Callout>
+
+---
+
+## Practice Problems
+
+**P1.** নিচের array তৈরি করো:
+```
+[[1 0 0 0]
+ [0 1 0 0]
+ [0 0 1 0]
+ [0 0 0 1]]
+```
+
+**P2.** ০ থেকে ১ এর মধ্যে ২০টা equally spaced number এর array তৈরি করো।
+
+**P3.** একটা (3, 4) shape এর array তৈরি করো যেখানে সব value হবে `np.pi`।
+
+**P4.** নিচের python list কে NumPy array এ convert করো এবং dtype হবে `float32`:
+```python
+data = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+```
+
+**P5.** একটা (100,) shape এর array বানাও যেখানে values হবে 5 থেকে শুরু করে step 3।
+
+<details>
+<summary>Solutions দেখো</summary>
+
+```python
+# P1
+np.eye(4, dtype=int)
+# অথবা
+np.identity(4, dtype=int)
+
+# P2
+np.linspace(0, 1, 20)
+
+# P3
+np.full((3, 4), np.pi)
+
+# P4
+data = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+arr = np.array(data, dtype=np.float32)
+
+# P5
+np.arange(5, 5 + 100*3, 3)[:100]
+# অথবা
+np.arange(5, 305, 3)
+```
+</details>

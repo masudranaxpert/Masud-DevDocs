@@ -1,0 +1,227 @@
+---
+title: Random
+description: NumPy Random — np.random.Generator (NumPy 2.x), distributions, seeding
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## NumPy 2.x — Generator Style (Recommended)
+
+```python
+import numpy as np
+
+# ✅ NumPy 1.17+ এবং 2.x — Generator ব্যবহার করো
+rng = np.random.default_rng(seed=42)   # reproducible
+rng = np.random.default_rng()          # random seed
+
+# ❌ পুরনো style — deprecation এর দিকে
+np.random.seed(42)
+np.random.random()
+np.random.randint(0, 10)
+```
+
+<Callout type="warn" title="পুরনো np.random.* functions avoid করো">
+  `np.random.rand()`, `np.random.randint()`, `np.random.seed()` — এগুলো global state share করে।
+  Thread-safe না, reproducibility guarantee নেই।
+  `np.random.default_rng()` দিয়ে Generator ব্যবহার করো।
+</Callout>
+
+---
+
+## Generator দিয়ে Random Numbers
+
+```python
+rng = np.random.default_rng(seed=42)
+
+# Integer
+rng.integers(0, 10)            # → single int [0, 10)
+rng.integers(0, 10, size=5)    # → 5 random ints
+rng.integers(0, 10, size=(3, 3))  # → 3×3 matrix
+
+# Float [0, 1)
+rng.random()                   # → single float
+rng.random(size=10)            # → 10 floats
+rng.random(size=(3, 4))        # → 3×4 matrix
+
+# Uniform distribution
+rng.uniform(low=5.0, high=10.0, size=5)   # → [5, 10) এর মধ্যে
+
+# Specific integer in range
+rng.integers(1, 101)           # 1 থেকে 100 inclusive
+```
+
+---
+
+## Statistical Distributions
+
+```python
+rng = np.random.default_rng(seed=42)
+
+# Normal (Gaussian) distribution
+rng.normal(loc=0, scale=1, size=1000)    # mean=0, std=1
+rng.normal(loc=5, scale=2, size=(3, 4))  # mean=5, std=2
+
+# Standard normal (shortcut)
+rng.standard_normal(size=1000)
+
+# Poisson distribution
+rng.poisson(lam=3, size=100)    # lam = average rate
+
+# Binomial distribution
+rng.binomial(n=10, p=0.5, size=100)   # 10 trials, 50% success
+
+# Exponential distribution
+rng.exponential(scale=1.0, size=100)
+
+# Beta distribution (0 to 1)
+rng.beta(a=2, b=5, size=100)
+
+# Gamma distribution
+rng.gamma(shape=2, scale=1, size=100)
+
+# Chi-squared distribution
+rng.chisquare(df=3, size=100)
+
+# Multinomial
+rng.multinomial(n=100, pvals=[0.2, 0.3, 0.5])
+# → [20, 30, 50] এর কাছাকাছি
+
+# Multivariate Normal
+mean = [0, 0]
+cov  = [[1, 0.5], [0.5, 1]]
+rng.multivariate_normal(mean, cov, size=1000)
+```
+
+---
+
+## Shuffle ও Choice
+
+```python
+rng = np.random.default_rng(seed=42)
+
+arr = np.array([1, 2, 3, 4, 5])
+
+# shuffle — in-place
+rng.shuffle(arr)
+print(arr)   # → some shuffled order
+
+# permutation — নতুন array return করে (original unchanged)
+perm = rng.permutation(arr)
+perm = rng.permutation(10)     # → shuffled 0..9
+
+# choice — random selection
+rng.choice([10, 20, 30, 40, 50], size=3)             # replace=True (default)
+rng.choice([10, 20, 30, 40, 50], size=3, replace=False)  # without replacement
+
+# weighted choice
+rng.choice([10, 20, 30], size=5, p=[0.1, 0.3, 0.6])
+# 30 হওয়ার সম্ভাবনা বেশি (60%)
+```
+
+---
+
+## Reproducibility — Seed
+
+```python
+# একই seed → একই results
+rng1 = np.random.default_rng(seed=42)
+rng2 = np.random.default_rng(seed=42)
+
+print(rng1.random(5))   # → [0.77, 0.43, ...]
+print(rng2.random(5))   # → same!
+
+# Different seeds → different results
+rng3 = np.random.default_rng(seed=123)
+print(rng3.random(5))   # → different
+
+# Machine learning এ সবসময় seed fix করো
+SEED = 42
+rng = np.random.default_rng(SEED)
+```
+
+---
+
+## Simulation Examples
+
+### Monte Carlo — π Estimate করো
+
+```python
+rng = np.random.default_rng(42)
+n = 1_000_000
+
+# Unit circle এ random points
+x = rng.random(n)
+y = rng.random(n)
+
+# Circle এর ভেতরে?
+inside = (x**2 + y**2) <= 1.0
+
+# π ≈ 4 * (circle points / total points)
+pi_estimate = 4 * inside.sum() / n
+print(f"π ≈ {pi_estimate:.4f}")   # → ≈ 3.1416
+```
+
+### Bootstrap Sampling
+
+```python
+rng = np.random.default_rng(42)
+data = np.array([23, 45, 12, 67, 34, 89, 45])
+
+# Bootstrap — with replacement
+n_bootstrap = 1000
+means = np.array([
+    rng.choice(data, size=len(data), replace=True).mean()
+    for _ in range(n_bootstrap)
+])
+
+# 95% confidence interval
+ci_lower = np.percentile(means, 2.5)
+ci_upper = np.percentile(means, 97.5)
+print(f"95% CI: [{ci_lower:.2f}, {ci_upper:.2f}]")
+```
+
+---
+
+## Practice Problems
+
+**P1.** Seed 99 দিয়ে একটা Generator বানাও। তারপর ৫০টা random integer 1-100 এর মধ্যে generate করো এবং তাদের mean বের করো।
+
+**P2.** একটা simulation করো: ১০,০০০ বার দুইটা dice roll করো। সবগুলো sum calculate করো এবং প্রতিটা sum কতবার আসলো তা count করো।
+
+**P3.** Normal distribution থেকে (mean=70, std=10) ১০০০টা exam score generate করো। তারপর বের করো কতজন 80 এর উপরে পেলো।
+
+**P4.** ২০টা integer এর একটা array বানাও। তারপর সেটাকে train (80%) এবং test (20%) এ split করো (shuffle করে)।
+
+<details>
+<summary>Solutions দেখো</summary>
+
+```python
+# P1
+rng = np.random.default_rng(99)
+nums = rng.integers(1, 101, size=50)
+print(f"Mean: {nums.mean():.2f}")
+
+# P2
+rng = np.random.default_rng(42)
+die1 = rng.integers(1, 7, size=10_000)
+die2 = rng.integers(1, 7, size=10_000)
+sums = die1 + die2
+unique, counts = np.unique(sums, return_counts=True)
+for val, cnt in zip(unique, counts):
+    print(f"Sum {val}: {cnt} times ({cnt/100:.1f}%)")
+
+# P3
+rng = np.random.default_rng(42)
+scores = rng.normal(loc=70, scale=10, size=1000)
+above_80 = np.sum(scores > 80)
+print(f"Students above 80: {above_80} ({above_80/10:.1f}%)")
+
+# P4
+rng = np.random.default_rng(42)
+data = np.arange(20)
+rng.shuffle(data)
+split = int(0.8 * len(data))
+train = data[:split]   # 16 elements
+test  = data[split:]   # 4 elements
+```
+</details>

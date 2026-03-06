@@ -1,0 +1,270 @@
+---
+title: Broadcasting
+description: NumPy Broadcasting — rules, examples, newaxis, ভুল, real-world use cases
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Broadcasting কী?
+
+Broadcasting হলো NumPy এর mechanism যেটা **different shapes** এর array গুলোকে loop ছাড়াই একসাথে operate করতে দেয়।
+
+```python
+import numpy as np
+
+# কোনো copy ছাড়াই scalar "stretch" হয়
+a = np.array([1, 2, 3])   # shape (3,)
+a + 10                     # → [11 12 13]
+
+# 1D + 2D
+b = np.array([[1, 2, 3],
+              [4, 5, 6]])  # shape (2, 3)
+b + a                      # → [[2  4  6]
+                            #    [5  7  9]]
+# a কে mentally (2, 3) তে stretch করা হয়েছে
+# কিন্তু আসলে কোনো copy হয়নি!
+```
+
+---
+
+## Broadcasting Rules — ৩টা নিয়ম
+
+দুইটা array operate করার সময় NumPy এই rules follow করে:
+
+**Rule 1:** যদি arrays এর ndim আলাদা হয়, ছোটটার shape এ বামদিকে `1` যোগ করো।
+
+**Rule 2:** যদি কোনো dimension এ size 1 থাকে, সেটা বড়টার size এ stretch হয়।
+
+**Rule 3:** যদি দুটো dimension এ size আলাদা এবং কোনোটাই 1 না, তাহলে `ValueError`।
+
+```python
+# Example 1: (3,) + (2, 3) → (2, 3)
+a = np.array([1, 2, 3])        # shape (3,)
+b = np.array([[10], [20]])     # shape (2, 1)
+
+# Rule 1: (3,) → (1, 3) (left pad with 1)
+# Rule 2: (1, 3) → (2, 3) এবং (2, 1) → (2, 3)
+# Result: (2, 3)
+a + b
+# → [[11 12 13]
+#    [21 22 23]]
+
+# Example 2: (4, 1) + (3,) → (4, 3)
+c = np.array([[1], [2], [3], [4]])   # shape (4, 1)
+d = np.array([10, 20, 30])           # shape (3,)
+c + d
+# → [[11 21 31]
+#    [12 22 32]
+#    [13 23 33]
+#    [14 24 34]]
+
+# ❌ Example 3: (3,) + (4,) → Error!
+np.array([1, 2, 3]) + np.array([1, 2, 3, 4])
+# ValueError: operands could not be broadcast together with shapes (3,) (4,)
+```
+
+---
+
+## Shape Compatibility চট করে দেখো
+
+```
+Array A:  (8, 1, 6, 1)
+Array B:     (7, 1, 5)
+
+Step 1 — left pad B: (1, 7, 1, 5)
+
+Compare dims:
+A:  8   1   6   1
+B:  1   7   1   5
+    ↓   ↓   ↓   ↓
+R:  8   7   6   5   ← compatible! (1 stretch হয়)
+
+Array A:  (3, 1)
+Array B:  (4, 5)
+Compare:
+A:  3   1
+B:  4   5
+    ↓   ↓
+    ✗   ✓  ← 3≠4 এবং কোনোটাই 1 না → ValueError!
+```
+
+---
+
+## Real-World Examples
+
+### 1. Row-wise Normalization
+
+```python
+# প্রতিটা student এর marks normalize করো
+marks = np.array([[80, 90, 70],    # Student 1
+                  [60, 75, 85],    # Student 2
+                  [95, 65, 80]])   # Student 3
+# shape: (3, 3)
+
+row_min = marks.min(axis=1, keepdims=True)  # shape (3, 1)
+row_max = marks.max(axis=1, keepdims=True)  # shape (3, 1)
+
+# (3, 3) - (3, 1) → broadcasting → (3, 3)
+normalized = (marks - row_min) / (row_max - row_min)
+```
+
+<Callout type="info" title="keepdims=True কেন দরকার">
+  `marks.min(axis=1)` দিলে shape হয় `(3,)` — তখন broadcasting কাজ করে না সঠিকভাবে।
+  `keepdims=True` দিলে shape থাকে `(3, 1)` — তখন row-wise broadcast হয়।
+</Callout>
+
+### 2. Distance Matrix
+
+```python
+# n টা points এর মধ্যে সব pairwise distance
+points = np.array([[1, 2],
+                   [3, 4],
+                   [5, 6]])   # shape (3, 2)
+
+# (3, 1, 2) - (1, 3, 2) → (3, 3, 2)
+diff = points[:, np.newaxis, :] - points[np.newaxis, :, :]
+distances = np.sqrt((diff ** 2).sum(axis=2))
+# distances[i, j] = distance between point i and point j
+```
+
+### 3. Batch Operations
+
+```python
+# ১০০০টা image normalize করো
+images = np.random.rand(1000, 224, 224, 3)   # shape (1000, 224, 224, 3)
+
+# Per-channel mean ও std
+mean = np.array([0.485, 0.456, 0.406])       # shape (3,)
+std  = np.array([0.229, 0.224, 0.225])       # shape (3,)
+
+# (1000, 224, 224, 3) - (3,) → broadcasting হয়
+# NumPy rule: (3,) → (1, 1, 1, 3) → (1000, 224, 224, 3)
+normalized = (images - mean) / std
+```
+
+### 4. Outer Product
+
+```python
+# সব pairs এর product
+a = np.array([1, 2, 3, 4])      # shape (4,)
+b = np.array([10, 20, 30])      # shape (3,)
+
+# (4, 1) * (3,) → (4, 3)
+outer = a[:, np.newaxis] * b
+# → [[10  20  30]
+#    [20  40  60]
+#    [30  60  90]
+#    [40  80 120]]
+
+# অথবা np.outer
+np.outer(a, b)   # same result
+```
+
+---
+
+## np.newaxis দিয়ে Shape Control
+
+```python
+a = np.array([1, 2, 3])   # shape (3,)
+
+a[np.newaxis, :]    # shape (1, 3) — row vector
+a[:, np.newaxis]    # shape (3, 1) — column vector
+
+# None ও same কাজ করে
+a[None, :]          # shape (1, 3)
+a[:, None]          # shape (3, 1)
+
+# Broadcasting enable করে
+row = np.array([1, 2, 3])     # (3,)
+col = np.array([10, 20, 30])  # (3,)
+
+# Element-wise add — same shape
+row + col   # → [11 22 33]
+
+# Outer add — all combinations
+row[:, np.newaxis] + col   # (3,1) + (3,) → (3,3)
+# → [[11 12 13]
+#    [21 22 23]
+#    [31 32 33]]
+```
+
+---
+
+## Broadcasting ভুলগুলো
+
+```python
+# ❌ ভুল 1 — keepdims ভুলে যাওয়া
+m = np.array([[1, 2, 3], [4, 5, 6]])   # (2, 3)
+
+col_mean = m.mean(axis=0)              # shape (3,)  ← ঠিক আছে
+m - col_mean                           # (2,3) - (3,) → works ✓
+
+row_mean = m.mean(axis=1)              # shape (2,) ← problem!
+# m - row_mean                         # (2,3) - (2,) → Error!
+
+# ✅ সঠিক
+row_mean = m.mean(axis=1, keepdims=True)   # shape (2, 1)
+m - row_mean                               # (2,3) - (2,1) → (2,3) ✓
+
+# ❌ ভুল 2 — incompatible shapes
+a = np.array([1, 2, 3])     # (3,)
+b = np.array([1, 2, 3, 4])  # (4,)
+a + b    # ValueError!
+
+# ❌ ভুল 3 — memory explosion হতে পারে
+# (10000, 1) + (1, 10000) → (10000, 10000) = 100M elements!
+# ৮০০ MB memory লাগবে!
+large_a = np.ones((10000, 1))
+large_b = np.ones((1, 10000))
+result = large_a + large_b    # ⚠️ memory দেখো আগে!
+```
+
+---
+
+## Practice Problems
+
+**P1.** Broadcasting ব্যবহার করে প্রতিটা column এর mean বাদ দাও (mean subtraction / centering):
+```python
+data = np.array([[2, 4, 6],
+                 [8, 10, 12],
+                 [14, 16, 18]])
+```
+
+**P2.** একটা (5,) vector আছে। একটা (3, 5) matrix এর প্রতিটা row থেকে এই vector বাদ দাও।
+
+**P3.** Multiplication table বানাও 1 থেকে 5 পর্যন্ত (loop ছাড়া, broadcasting দিয়ে):
+```
+Expected:
+[[ 1  2  3  4  5]
+ [ 2  4  6  8 10]
+ [ 3  6  9 12 15]
+ [ 4  8 12 16 20]
+ [ 5 10 15 20 25]]
+```
+
+**P4.** ৫টা point এর 2D coordinates আছে। Broadcasting দিয়ে সব pairwise distance calculate করো।
+
+<details>
+<summary>Solutions দেখো</summary>
+
+```python
+# P1
+data = np.array([[2, 4, 6], [8, 10, 12], [14, 16, 18]])
+col_mean = data.mean(axis=0)   # shape (3,)
+centered = data - col_mean     # (3,3) - (3,) → works
+
+# P2
+matrix = np.random.rand(3, 5)
+vector = np.array([1, 2, 3, 4, 5])   # (5,)
+result = matrix - vector              # (3,5) - (5,) → (3,5)
+
+# P3
+a = np.arange(1, 6)            # [1, 2, 3, 4, 5] shape (5,)
+table = a[:, np.newaxis] * a   # (5,1) * (5,) → (5,5)
+
+# P4
+points = np.random.rand(5, 2)  # (5, 2)
+diff = points[:, np.newaxis, :] - points[np.newaxis, :, :]  # (5,5,2)
+distances = np.sqrt((diff**2).sum(axis=2))  # (5,5)
+```
+</details>

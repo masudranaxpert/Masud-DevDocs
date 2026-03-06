@@ -1,0 +1,102 @@
+---
+title: Overview
+description: NumPy 2.x — Python scientific computing এর backbone, কী নতুন এলো
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+## NumPy কী?
+
+NumPy হলো Python এর সবচেয়ে important scientific computing library। Pandas, Scikit-learn, TensorFlow, PyTorch — সব NumPy এর উপরে build করা।
+
+**কেন NumPy?**
+- Python list এর চেয়ে **10–100x দ্রুত** — C তে লেখা, SIMD optimized
+- **Vectorization** — loop ছাড়াই array operation
+- **Broadcasting** — different shape এ operation
+- **Memory efficient** — contiguous memory block
+
+---
+
+## NumPy 2.x — কী নতুন
+
+<Callout type="info" title="Current stable: NumPy 2.4.x (2025)">
+  NumPy 2.0 ছিল ২০০৬ এর পরে প্রথম major release। Python 3.9+ required।
+  এখন latest stable হলো **NumPy 2.4.x**।
+</Callout>
+
+<Cards>
+  <Card title="🔤 StringDType" description="Variable-length string এর জন্য নতুন dtype। np.strings namespace এ performant ufuncs।" />
+  <Card title="⚡ Type Promotion" description="NEP 50 — নতুন type promotion rules। Python scalar + NumPy array এখন আরো predictable।" />
+  <Card title="🔢 Shape in repr" description="বড় array এর repr এ এখন shape দেখায়। আগে শুধু ... ছিল।" />
+  <Card title="🛑 Breaking Changes" description="np.core removed, newshape parameter removed from reshape, scalar conversion rules changed।" />
+</Cards>
+
+### NumPy 2.0+ এ Remove হয়েছে যা জানতে হবে
+
+```python
+# ❌ আগের code (NumPy 1.x)
+arr.reshape(newshape=(3, 4))           # newshape parameter removed
+np.core.umath_tests                    # np.core removed
+result = np.float32(arr)               # ndim>0 array → scalar (removed)
+
+# ✅ NumPy 2.x সঠিক
+arr.reshape((3, 4))                    # positional অথবা shape=
+arr.reshape(shape=(3, 4))             # shape= keyword
+arr.item()                             # scalar extract করো
+arr[0]                                 # single element
+```
+
+---
+
+## Install
+
+```bash
+pip install numpy           # latest stable
+pip install "numpy>=2.0"    # 2.x ensure করো
+uv add numpy                # uv দিয়ে
+
+# Version check করো
+python -c "import numpy; print(numpy.__version__)"
+```
+
+---
+
+## Docs এ কী কী আছে
+
+| File | Topics |
+|---|---|
+| [Basic](./basic) | ndarray, dtype, array creation, attributes |
+| [Indexing](./indexing) | Slicing, fancy indexing, boolean mask |
+| [Operations](./operations) | Math ops, ufuncs, vectorization, np.where |
+| [Broadcasting](./broadcasting) | Rules, examples, common mistakes |
+| [Shape](./shape) | reshape, stack, split, transpose, flatten |
+| [Math](./math) | Statistics, linear algebra, FFT, sorting |
+| [Random](./random) | np.random.Generator (NumPy 2.x style) |
+| [Performance](./performance) | Views vs copy, memory layout, profiling |
+| [Practice](./practice) | ❓ সব topics এর practice problems + solutions |
+
+---
+
+## NumPy vs Python List
+
+```python
+import numpy as np
+import time
+
+n = 10_000_000
+
+# Python list
+lst = list(range(n))
+start = time.perf_counter()
+result = [x * 2 for x in lst]
+print(f"List:  {time.perf_counter() - start:.3f}s")
+
+# NumPy array
+arr = np.arange(n)
+start = time.perf_counter()
+result = arr * 2
+print(f"NumPy: {time.perf_counter() - start:.3f}s")
+
+# NumPy: ~10-50x faster!
+```

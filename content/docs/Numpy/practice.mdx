@@ -1,0 +1,396 @@
+---
+title: Practice
+description: NumPy Practice Problems — সব topics এর combined exercises, real-world scenarios
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+<Callout type="info" title="এই page এ আছে">
+  সব NumPy topics এর উপরে mixed practice problems। Real data science scenarios।
+  প্রতিটা problem এ hints এবং solutions আছে।
+</Callout>
+
+---
+
+## Beginner — Array Basics ও Indexing
+
+**B1. Grade Analysis**
+
+```python
+grades = np.array([85, 92, 78, 65, 90, 88, 72, 95, 61, 83])
+```
+এই grades array থেকে:
+1. Mean, max, min বের করো
+2. 80 এর উপরের grades এর count করো
+3. Failing grades (60 এর নিচে) কে 60 দিয়ে replace করো
+4. Grades descending order এ sort করো এবং top-3 দেখাও
+
+<details>
+<summary>Solution</summary>
+
+```python
+import numpy as np
+grades = np.array([85, 92, 78, 65, 90, 88, 72, 95, 61, 83])
+
+# 1
+print(f"Mean: {grades.mean():.1f}, Max: {grades.max()}, Min: {grades.min()}")
+
+# 2
+above_80 = np.sum(grades > 80)
+print(f"Above 80: {above_80}")
+
+# 3
+grades_fixed = grades.copy()
+grades_fixed[grades_fixed < 60] = 60
+
+# 4
+sorted_grades = np.sort(grades)[::-1]
+print(f"Top 3: {sorted_grades[:3]}")
+```
+</details>
+
+---
+
+**B2. Image Pixel Manipulation**
+
+```python
+# 5x5 grayscale image (pixel values 0-255)
+image = np.array([
+    [10,  20,  30,  40,  50],
+    [60,  70,  80,  90, 100],
+    [110, 120, 130, 140, 150],
+    [160, 170, 180, 190, 200],
+    [210, 220, 230, 240, 250]
+], dtype=np.uint8)
+```
+1. Image কে [0, 1] এ normalize করো
+2. Center 3×3 crop করো
+3. 128 এর উপরের pixels কে 255 করো (thresholding)
+4. Image কে vertically flip করো
+
+<details>
+<summary>Solution</summary>
+
+```python
+# 1
+normalized = image / 255.0
+
+# 2
+center = image[1:4, 1:4]
+
+# 3
+thresholded = image.copy()
+thresholded[thresholded > 128] = 255
+
+# 4
+flipped = image[::-1, :]
+```
+</details>
+
+---
+
+## Intermediate — Operations ও Broadcasting
+
+**I1. Student Score Matrix**
+
+```python
+# 5 students × 4 subjects
+scores = np.array([
+    [85, 78, 92, 88],
+    [72, 65, 80, 75],
+    [90, 95, 88, 92],
+    [60, 70, 65, 68],
+    [88, 82, 79, 91]
+])
+subject_names = ['Math', 'Physics', 'Chemistry', 'Biology']
+```
+1. প্রতিটা student এর average বের করো
+2. প্রতিটা subject এর highest scorer এর index বের করো
+3. প্রতিটা subject এ mean থেকে score এর deviation বের করো (broadcasting)
+4. যেসব students সব subject এ ৭৫ এর উপরে পেয়েছে তাদের select করো
+
+<details>
+<summary>Solution</summary>
+
+```python
+scores = np.array([[85, 78, 92, 88], [72, 65, 80, 75],
+                   [90, 95, 88, 92], [60, 70, 65, 68], [88, 82, 79, 91]])
+
+# 1
+student_avg = scores.mean(axis=1)
+print("Averages:", student_avg.round(1))
+
+# 2
+top_scorer_idx = scores.argmax(axis=0)
+print("Top scorers (row idx):", top_scorer_idx)
+
+# 3
+subject_mean = scores.mean(axis=0)    # shape (4,)
+deviation = scores - subject_mean      # broadcasting: (5,4) - (4,)
+print("Deviations:\n", deviation.round(1))
+
+# 4
+all_above_75 = np.all(scores > 75, axis=1)
+good_students = scores[all_above_75]
+print("Students with all > 75:\n", good_students)
+```
+</details>
+
+---
+
+**I2. Time Series Analysis**
+
+```python
+rng = np.random.default_rng(42)
+# ৩০ দিনের daily temperature (Celsius)
+temp = rng.normal(loc=25, scale=5, size=30)
+```
+1. 7-day moving average calculate করো (loop ছাড়া)
+2. সবচেয়ে hot streak (consecutive days above 28°C) খুঁজে বের করো
+3. Temperature normalize করো [-1, 1] range এ
+
+<details>
+<summary>Solution</summary>
+
+```python
+rng = np.random.default_rng(42)
+temp = rng.normal(loc=25, scale=5, size=30)
+
+# 1 — 7-day moving average
+window = 7
+moving_avg = np.array([temp[i:i+window].mean() for i in range(len(temp)-window+1)])
+# NumPy 2.x তে numpy.lib.stride_tricks দিয়েও করা যায়
+
+# 2 — Hot streak
+above_28 = temp > 28
+# Streak calculation
+max_streak = 0
+current_streak = 0
+for val in above_28:
+    if val:
+        current_streak += 1
+        max_streak = max(max_streak, current_streak)
+    else:
+        current_streak = 0
+print(f"Longest hot streak: {max_streak} days")
+
+# 3 — Normalize to [-1, 1]
+t_min, t_max = temp.min(), temp.max()
+normalized = 2 * (temp - t_min) / (t_max - t_min) - 1
+```
+</details>
+
+---
+
+**I3. Matrix Operations**
+
+1. একটা (4, 4) random matrix বানাও। তার determinant, trace, ও rank বের করো।
+2. একটা (3, 3) matrix নাও। verify করো যে `A @ A_inv = I` (identity matrix)
+3. Linear regression: `y = mx + b` fit করো এই data তে:
+```python
+x = np.array([1, 2, 3, 4, 5])
+y = np.array([2.1, 4.0, 5.9, 8.1, 9.9])
+# Expected: m ≈ 2, b ≈ 0
+```
+
+<details>
+<summary>Solution</summary>
+
+```python
+rng = np.random.default_rng(42)
+
+# 1
+A = rng.random((4, 4))
+print(f"Det: {np.linalg.det(A):.4f}")
+print(f"Trace: {np.trace(A):.4f}")
+print(f"Rank: {np.linalg.matrix_rank(A)}")
+
+# 2
+B = rng.random((3, 3))
+B_inv = np.linalg.inv(B)
+product = B @ B_inv
+print(np.allclose(product, np.eye(3)))  # → True
+
+# 3
+x = np.array([1, 2, 3, 4, 5])
+y = np.array([2.1, 4.0, 5.9, 8.1, 9.9])
+# Design matrix [x, 1]
+A = np.column_stack([x, np.ones(len(x))])
+m, b = np.linalg.lstsq(A, y, rcond=None)[0]
+print(f"y = {m:.2f}x + {b:.2f}")  # → y = 1.97x + 0.14
+```
+</details>
+
+---
+
+## Advanced — Real-world Scenarios
+
+**A1. Image Processing Pipeline**
+
+```python
+rng = np.random.default_rng(42)
+# RGB image: 100×100×3
+image = (rng.random((100, 100, 3)) * 255).astype(np.uint8)
+```
+1. RGB to Grayscale convert করো: `gray = 0.299R + 0.587G + 0.114B`
+2. ২০% brightness বাড়াও (overflow 255 এ clip করো)
+3. Horizontal ও vertical edges detect করো (Sobel filter):
+   ```
+   Sobel_x = [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]
+   ```
+4. Batch normalize করো: সব channels এ mean 0, std 1
+
+<details>
+<summary>Solution</summary>
+
+```python
+rng = np.random.default_rng(42)
+image = (rng.random((100, 100, 3)) * 255).astype(np.uint8)
+
+# 1 — RGB to Grayscale
+weights = np.array([0.299, 0.587, 0.114])  # shape (3,)
+gray = (image * weights).sum(axis=2).astype(np.uint8)  # broadcasting: (100,100,3)*(3,)
+
+# 2 — Brightness
+bright = np.clip(image.astype(np.int32) + int(255 * 0.2), 0, 255).astype(np.uint8)
+
+# 3 — Sobel (simplified, no padding)
+sobel_x = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
+# Convolution দিয়ে করলে scipy.signal.convolve2d লাগবে
+# NumPy দিয়ে manual:
+from numpy.lib.stride_tricks import sliding_window_view
+gray_f = gray.astype(np.float32)
+patches = sliding_window_view(gray_f, (3, 3))  # (98, 98, 3, 3)
+edges_x = (patches * sobel_x).sum(axis=(-2, -1))
+
+# 4 — Batch normalize
+img_float = image.astype(np.float32)
+mean = img_float.mean(axis=(0, 1), keepdims=True)  # (1, 1, 3)
+std  = img_float.std(axis=(0, 1), keepdims=True)   # (1, 1, 3)
+normalized = (img_float - mean) / (std + 1e-8)
+```
+</details>
+
+---
+
+**A2. Monte Carlo Simulation**
+
+Stock price simulation করো (Geometric Brownian Motion):
+- Initial price: 100
+- Daily return: mean=0.001, std=0.02
+- Simulate 1000 paths, each 252 trading days (1 year)
+- Calculate: final price distribution, probability of profit, 95% VaR
+
+<details>
+<summary>Solution</summary>
+
+```python
+rng = np.random.default_rng(42)
+
+n_paths = 1000
+n_days = 252
+S0 = 100.0
+mu = 0.001
+sigma = 0.02
+
+# Daily returns — (n_days, n_paths)
+daily_returns = rng.normal(mu, sigma, size=(n_days, n_paths))
+
+# Cumulative product → price paths
+price_paths = S0 * np.cumprod(1 + daily_returns, axis=0)
+
+# Final prices
+final_prices = price_paths[-1]
+
+print(f"Mean final price: ${final_prices.mean():.2f}")
+print(f"Median: ${np.median(final_prices):.2f}")
+print(f"Std: ${final_prices.std():.2f}")
+
+# Probability of profit
+prob_profit = np.mean(final_prices > S0)
+print(f"Profit probability: {prob_profit:.1%}")
+
+# 95% Value at Risk
+var_95 = S0 - np.percentile(final_prices, 5)
+print(f"95% VaR: ${var_95:.2f}")
+```
+</details>
+
+---
+
+**A3. K-Means Clustering (Manual)**
+
+NumPy দিয়ে K-Means algorithm implement করো:
+
+```python
+rng = np.random.default_rng(42)
+# 3টা cluster এর data
+data = np.vstack([
+    rng.normal([0, 0], 1, (100, 2)),
+    rng.normal([5, 5], 1, (100, 2)),
+    rng.normal([0, 5], 1, (100, 2))
+])
+```
+
+<details>
+<summary>Solution (Manual K-Means)</summary>
+
+```python
+def kmeans(data, k=3, n_iter=100, seed=42):
+    rng = np.random.default_rng(seed)
+    n_samples = len(data)
+
+    # Random initialization
+    idx = rng.choice(n_samples, size=k, replace=False)
+    centroids = data[idx].copy()
+
+    for _ in range(n_iter):
+        # Assignment step — broadcasting দিয়ে distances
+        # data: (300, 2), centroids: (3, 2)
+        # diff: (300, 3, 2) — প্রতিটা point থেকে সব centroids
+        diff = data[:, np.newaxis, :] - centroids[np.newaxis, :, :]
+        distances = np.sqrt((diff ** 2).sum(axis=2))  # (300, 3)
+
+        labels = distances.argmin(axis=1)   # (300,) — nearest centroid
+
+        # Update step
+        new_centroids = np.array([
+            data[labels == k_].mean(axis=0)
+            for k_ in range(k)
+        ])
+
+        # Converged?
+        if np.allclose(centroids, new_centroids):
+            break
+        centroids = new_centroids
+
+    return labels, centroids
+
+rng = np.random.default_rng(42)
+data = np.vstack([
+    rng.normal([0, 0], 1, (100, 2)),
+    rng.normal([5, 5], 1, (100, 2)),
+    rng.normal([0, 5], 1, (100, 2))
+])
+
+labels, centroids = kmeans(data, k=3)
+print("Centroids:", centroids.round(2))
+# → approximately [[0, 0], [5, 5], [0, 5]]
+```
+</details>
+
+---
+
+## চট করে Review
+
+```
+Basic:        np.array(), arange, linspace, zeros, ones, full, eye
+dtype:        int8/16/32/64, float16/32/64, uint8
+Indexing:     [i], [i:j:k], [arr], [mask], [...], newaxis
+Operations:   +,-,*,/, **, @, np.where, np.clip, ufuncs
+Broadcasting: same dim থেকে right match, 1 stretch হয়
+Shape:        reshape, T, stack, concat, split, squeeze
+Math:         linalg.solve, eig, svd, sort, unique, histogram
+Random:       default_rng(seed), integers, normal, choice, shuffle
+Performance:  view vs copy, vectorize, in-place, dtype optimize
+```

@@ -1,0 +1,294 @@
+---
+title: Math
+description: NumPy Math — Statistics, Linear Algebra, Sorting, Searching, Set operations
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Statistics
+
+```python
+import numpy as np
+
+data = np.array([[4, 7, 2, 9],
+                 [1, 8, 5, 3],
+                 [6, 3, 8, 2]])
+
+# Basic statistics
+np.mean(data)              # → 4.833...  (overall)
+np.mean(data, axis=0)      # → [3.67 6.  5.  4.67]  (column mean)
+np.mean(data, axis=1)      # → [5.5  4.25 4.75]      (row mean)
+
+np.median(data)            # → 4.5
+np.std(data)               # → standard deviation
+np.var(data)               # → variance
+np.std(data, ddof=1)       # → sample std (N-1 এ divide)
+
+# Min / Max with location
+np.min(data)               # → 1
+np.max(data, axis=1)       # → [9 8 8]
+np.argmin(data)            # → 2  (flat index)
+np.argmax(data, axis=0)    # → [2 0 2 0]  (row index of max)
+
+# Percentile ও Quantile
+np.percentile(data, 25)    # → Q1
+np.percentile(data, 75)    # → Q3
+np.percentile(data, [25, 50, 75])   # → [Q1, median, Q3]
+np.quantile(data, 0.95)    # → 95th percentile
+
+# NaN-safe versions
+data_with_nan = np.array([1, 2, np.nan, 4, 5])
+np.nanmean(data_with_nan)    # → 3.0  (NaN ignore)
+np.nanstd(data_with_nan)
+np.nansum(data_with_nan)     # → 12.0
+np.nanmax(data_with_nan)     # → 5.0
+
+# Histogram
+counts, bins = np.histogram(data, bins=5)
+counts, bins = np.histogram(data, bins=np.linspace(0, 10, 6))
+```
+
+---
+
+## Linear Algebra — np.linalg
+
+<Tabs items={['Basic', 'Decomposition', 'Solve', 'Properties']}>
+  <Tab value="Basic">
+    ```python
+    A = np.array([[1, 2], [3, 4]])
+    B = np.array([[5, 6], [7, 8]])
+    v = np.array([1, 2])
+
+    # Matrix multiplication
+    A @ B              # → [[19 22] [43 50]]
+    np.matmul(A, B)    # → same
+
+    # Dot product
+    np.dot(v, v)       # → 5  (1²+2²)
+
+    # Inner / Outer product
+    np.inner(v, v)     # → 5
+    np.outer(v, v)     # → [[1 2] [2 4]]
+
+    # Kronecker product
+    np.kron(A, B)
+    ```
+  </Tab>
+  <Tab value="Decomposition">
+    ```python
+    A = np.array([[4, 2], [2, 3]])
+
+    # Eigenvalues ও eigenvectors
+    eigenvalues, eigenvectors = np.linalg.eig(A)
+    print(eigenvalues)    # → [5.  2.]
+    print(eigenvectors)   # → columns are eigenvectors
+
+    # SVD — Singular Value Decomposition
+    U, S, Vt = np.linalg.svd(A)
+    # A ≈ U @ np.diag(S) @ Vt
+
+    # QR Decomposition
+    Q, R = np.linalg.qr(A)
+    # A = Q @ R
+
+    # Cholesky (symmetric positive definite matrix এ)
+    L = np.linalg.cholesky(A)
+    # A = L @ L.T
+    ```
+  </Tab>
+  <Tab value="Solve">
+    ```python
+    # Linear system সমাধান: Ax = b
+    A = np.array([[2, 1], [1, 3]])
+    b = np.array([5, 10])
+
+    x = np.linalg.solve(A, b)
+    # → [1. 3.]  (2x+y=5, x+3y=10 এর সমাধান)
+
+    # Check করো: A @ x ≈ b
+    np.allclose(A @ x, b)   # → True
+
+    # Least squares — overdetermined system
+    A = np.array([[1, 1], [1, 2], [1, 3]])
+    b = np.array([2, 3, 5])
+    coeffs, residuals, rank, sv = np.linalg.lstsq(A, b, rcond=None)
+    # Linear regression এর basis!
+
+    # Inverse ও Pseudo-inverse
+    np.linalg.inv(A[:2, :2])  # square matrix inverse
+    np.linalg.pinv(A)          # pseudo-inverse (non-square এ)
+    ```
+  </Tab>
+  <Tab value="Properties">
+    ```python
+    A = np.array([[1, 2], [3, 4]])
+
+    np.linalg.det(A)        # → -2.0  (determinant)
+    np.linalg.matrix_rank(A) # → 2   (rank)
+    np.linalg.norm(A)        # → Frobenius norm
+    np.linalg.norm(A, ord=1) # → column max norm
+    np.linalg.norm(A, ord=2) # → spectral norm (max singular value)
+    np.linalg.norm(A, ord='fro')  # → Frobenius
+    np.trace(A)              # → 5   (diagonal sum = 1+4)
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Sorting
+
+```python
+a = np.array([3, 1, 4, 1, 5, 9, 2, 6])
+
+# Sort — নতুন sorted array return করে
+np.sort(a)              # → [1 1 2 3 4 5 6 9]
+np.sort(a)[::-1]        # → descending [9 6 5 4 3 2 1 1]
+
+# In-place sort
+a.sort()                # a নিজেই sorted হয়
+
+# argsort — sorted এর index return করে
+idx = np.argsort(a)     # → indices যা দিয়ে sort হবে
+a[idx]                  # → sorted array
+
+# 2D sort
+m = np.array([[3, 1, 4], [1, 5, 9], [2, 6, 5]])
+np.sort(m, axis=1)      # → প্রতিটা row sort
+np.sort(m, axis=0)      # → প্রতিটা column sort
+
+# Partial sort — k smallest
+np.partition(a, k=3)    # → first 3 elements smallest (not sorted among themselves)
+np.argpartition(a, k=3) # → index version
+
+# Top-k elements
+k = 3
+top_k_idx = np.argsort(a)[-k:][::-1]
+top_k = a[top_k_idx]
+```
+
+---
+
+## Searching ও Unique
+
+```python
+a = np.array([3, 1, 4, 1, 5, 9, 2, 6])
+
+# Find elements
+np.where(a > 4)         # → (array([5, 7]),)  indices
+np.searchsorted(np.sort(a), 4)   # binary search, sorted array তে
+
+# Non-zero elements
+np.nonzero(a)           # → indices of non-zero elements
+b = np.array([0, 1, 0, 3, 0])
+np.nonzero(b)           # → (array([1, 3]),)
+
+# any ও all
+np.any(a > 8)           # → True  (কোনো একটা হলেই)
+np.all(a > 0)           # → True  (সবগুলো)
+np.any(a > 8, axis=None)
+
+# Unique values
+u = np.unique(a)           # → [1 2 3 4 5 6 9]
+u, counts = np.unique(a, return_counts=True)    # → counts সহ
+u, idx = np.unique(a, return_index=True)         # → first occurrence index
+u, inv = np.unique(a, return_inverse=True)       # → original reconstruct করার index
+```
+
+---
+
+## Set Operations
+
+```python
+a = np.array([1, 2, 3, 4, 5])
+b = np.array([3, 4, 5, 6, 7])
+
+np.intersect1d(a, b)    # → [3 4 5]  (common)
+np.union1d(a, b)        # → [1 2 3 4 5 6 7]
+np.setdiff1d(a, b)      # → [1 2]    (a তে আছে, b তে নেই)
+np.setxor1d(a, b)       # → [1 2 6 7]  (either তে, not both)
+np.in1d(a, b)           # → [F F T T T]  (a এর প্রতিটা b তে আছে?)
+np.isin(a, b)           # → same (preferred in NumPy 2.x)
+```
+
+---
+
+## FFT — Signal Processing
+
+```python
+# Discrete Fourier Transform
+signal = np.sin(2 * np.pi * np.linspace(0, 1, 100))
+
+fft_result = np.fft.fft(signal)          # complex output
+frequencies = np.fft.fftfreq(len(signal))  # corresponding frequencies
+magnitude = np.abs(fft_result)            # magnitude spectrum
+
+# Inverse FFT
+original = np.fft.ifft(fft_result)        # back to time domain
+
+# Real FFT (signal real হলে)
+rfft_result = np.fft.rfft(signal)         # only positive frequencies
+np.fft.irfft(rfft_result)                 # inverse
+
+# 2D FFT (image processing)
+image = np.random.rand(100, 100)
+fft_2d = np.fft.fft2(image)
+```
+
+---
+
+## Practice Problems
+
+**P1.** এই dataset এর mean, median, std, Q1, Q3 বের করো:
+```python
+data = np.array([23, 45, 12, 67, 34, 89, 45, 23, 56, 78])
+```
+
+**P2.** এই 2D array এর প্রতিটা row sort করো এবং প্রতিটা column এর top-2 values বের করো:
+```python
+m = np.array([[3, 1, 4, 1], [5, 9, 2, 6], [5, 3, 5, 8]])
+```
+
+**P3.** দুইটা linear equation solve করো:
+```
+3x + 2y = 12
+x - y = 1
+```
+
+**P4.** এই array তে কোনো duplicate আছে? কোন values duplicate?
+```python
+arr = np.array([1, 2, 3, 2, 4, 3, 5, 1])
+```
+
+<details>
+<summary>Solutions দেখো</summary>
+
+```python
+# P1
+data = np.array([23, 45, 12, 67, 34, 89, 45, 23, 56, 78])
+print(f"Mean: {np.mean(data):.2f}")
+print(f"Median: {np.median(data)}")
+print(f"Std: {np.std(data):.2f}")
+q1, q3 = np.percentile(data, [25, 75])
+
+# P2
+m = np.array([[3, 1, 4, 1], [5, 9, 2, 6], [5, 3, 5, 8]])
+row_sorted = np.sort(m, axis=1)
+# Top-2 per column:
+top2_idx = np.argpartition(m, -2, axis=0)[-2:]
+top2 = m[top2_idx, np.arange(m.shape[1])]
+
+# P3
+A = np.array([[3, 2], [1, -1]])
+b = np.array([12, 1])
+x = np.linalg.solve(A, b)   # → [2. 1.]  (x=2, y=1)
+
+# P4
+arr = np.array([1, 2, 3, 2, 4, 3, 5, 1])
+unique, counts = np.unique(arr, return_counts=True)
+duplicates = unique[counts > 1]   # → [1 2 3]
+print(f"Duplicates exist: {len(duplicates) > 0}")
+print(f"Duplicate values: {duplicates}")
+```
+</details>

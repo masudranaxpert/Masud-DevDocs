@@ -1,0 +1,300 @@
+---
+title: Indexing
+description: NumPy Indexing — slicing, fancy indexing, boolean masking, ellipsis
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Basic Indexing ও Slicing
+
+```python
+import numpy as np
+
+a = np.array([10, 20, 30, 40, 50])
+
+# Single element
+a[0]    # → 10
+a[-1]   # → 50  (last)
+a[-2]   # → 40
+
+# Slice: [start:stop:step]
+a[1:4]  # → [20 30 40]  (index 1, 2, 3)
+a[:3]   # → [10 20 30]
+a[2:]   # → [30 40 50]
+a[::2]  # → [10 30 50]  (every 2nd)
+a[::-1] # → [50 40 30 20 10]  (reversed)
+```
+
+### 2D Indexing
+
+```python
+m = np.array([[1,  2,  3,  4],
+              [5,  6,  7,  8],
+              [9, 10, 11, 12]])
+
+# [row, col] — comma separated
+m[0, 0]    # → 1
+m[1, 2]    # → 7
+m[-1, -1]  # → 12
+
+# Row slice
+m[0]       # → [1 2 3 4]   (first row, 1D)
+m[0, :]    # → [1 2 3 4]   (same)
+m[:, 1]    # → [2 6 10]    (second column, 1D)
+
+# Sub-matrix
+m[0:2, 1:3]   # → [[2  3]
+               #    [6  7]]
+
+m[:, ::2]     # → columns 0, 2
+              # → [[ 1  3]
+              #    [ 5  7]
+              #    [ 9 11]]
+```
+
+---
+
+## Fancy Indexing — Array দিয়ে Index করো
+
+```python
+a = np.array([10, 20, 30, 40, 50, 60])
+
+# Integer array দিয়ে
+idx = np.array([0, 2, 4])
+a[idx]          # → [10 30 50]
+
+# যেকোনো order এ
+a[[4, 1, 0]]    # → [50 20 10]
+
+# Repeated index
+a[[0, 0, 2]]    # → [10 10 30]
+```
+
+### 2D Fancy Indexing
+
+```python
+m = np.array([[1,  2,  3],
+              [4,  5,  6],
+              [7,  8,  9],
+              [10, 11, 12]])
+
+# Row selection
+m[[0, 2]]          # → rows 0 এবং 2
+                   # → [[ 1  2  3]
+                   #    [ 7  8  9]]
+
+# Specific elements — row array এবং col array pair হয়
+rows = np.array([0, 1, 2])
+cols = np.array([2, 0, 1])
+m[rows, cols]      # → [m[0,2], m[1,0], m[2,1]]
+                   # → [3, 4, 8]
+
+# np.ix_ — outer product indexing
+row_idx = np.array([0, 2])
+col_idx = np.array([0, 2])
+m[np.ix_(row_idx, col_idx)]   # → [[m[0,0] m[0,2]]
+                               #    [m[2,0] m[2,2]]]
+                               # → [[1 3] [7 9]]
+```
+
+<Callout type="warn" title="Fancy Indexing → Copy! Slice → View!">
+  Fancy indexing সবসময় **copy** তৈরি করে — modify করলে original পরিবর্তন হয় না।
+  Basic slicing **view** তৈরি করে — একই memory share করে।
+</Callout>
+
+---
+
+## Boolean Indexing (Masking)
+
+```python
+a = np.array([10, -5, 30, -20, 50, -1])
+
+# Boolean mask তৈরি হয়
+mask = a > 0         # → [True False True False True False]
+a[mask]              # → [10 30 50]   (শুধু positive)
+
+# One-liner
+a[a > 0]             # → [10 30 50]
+a[a < 0]             # → [-5 -20 -1]
+a[a % 2 == 0]        # → [10 30 -20 50]  (even)
+
+# Multiple conditions — & (and), | (or), ~ (not)
+a[(a > 0) & (a < 40)]  # → [10 30]
+a[(a < 0) | (a > 40)]  # → [-5 -20 50 -1]
+a[~(a > 0)]            # → [-5 -20 -1]  (not positive)
+```
+
+### 2D তে Boolean Masking
+
+```python
+m = np.array([[1,  2,  3],
+              [4,  5,  6],
+              [7,  8,  9]])
+
+# সব elements এ apply হয় — 1D result
+m[m > 5]          # → [6 7 8 9]
+
+# Condition দিয়ে replace করো
+m[m > 5] = 0      # 5 এর বেশি সব 0 হয়ে যাবে
+print(m)
+# → [[1 2 3]
+#    [4 5 0]
+#    [0 0 0]]
+
+# np.where দিয়ে conditional (original পরিবর্তন হয় না)
+result = np.where(m > 3, m * 2, 0)
+# m > 3 হলে m*2, নাহলে 0
+```
+
+---
+
+## Ellipsis (...) ও np.newaxis
+
+```python
+# Ellipsis — বাকি সব dimensions এর মানে
+arr = np.zeros((2, 3, 4, 5))
+
+arr[0, ...]          # → shape (3, 4, 5)
+arr[..., 0]          # → shape (2, 3, 4)
+arr[0, ..., 0]       # → shape (3, 4)
+arr[1, 2, ...]       # → shape (4, 5)
+
+# np.newaxis — নতুন axis যোগ করো (shape বাড়াও)
+a = np.array([1, 2, 3])     # shape (3,)
+a[np.newaxis, :]             # shape (1, 3) — row vector
+a[:, np.newaxis]             # shape (3, 1) — column vector
+
+# Broadcasting এর জন্য দরকার হয়
+b = np.array([10, 20])       # shape (2,)
+a[:, np.newaxis] + b         # (3,1) + (2,) → (3,2)
+# → [[11 21]
+#    [12 22]
+#    [13 23]]
+```
+
+---
+
+## Slicing সব ভুল
+
+<Tabs items={['View vs Copy', 'Slice Pitfalls', '2D Mistakes']}>
+  <Tab value="View vs Copy">
+    ```python
+    original = np.array([1, 2, 3, 4, 5])
+
+    # ❌ ভুল ধারণা — slice করলে copy হয়
+    sliced = original[1:4]
+    sliced[0] = 99
+    print(original)  # → [1 99 3 4 5]  ← original ও পরিবর্তন হয়েছে!
+
+    # Slice → View (same memory)
+    # Fancy indexing → Copy (different memory)
+    fancy = original[[1, 2, 3]]
+    fancy[0] = 0
+    print(original)  # → unchanged
+
+    # ✅ সত্যিকারের copy দরকার হলে
+    copy = original[1:4].copy()
+    copy[0] = 99
+    print(original)  # → unchanged
+    ```
+  </Tab>
+  <Tab value="Slice Pitfalls">
+    ```python
+    a = np.array([0, 1, 2, 3, 4])
+
+    # stop index exclusive (Python convention)
+    a[1:3]    # → [1, 2]  (index 3 বাদ)
+
+    # Negative step
+    a[4:1:-1]  # → [4, 3, 2]  (4 থেকে 2 পর্যন্ত, exclusive 1)
+    a[::-1]    # → [4, 3, 2, 1, 0]
+
+    # Out of bounds — error না, clip হয়
+    a[0:100]   # → [0 1 2 3 4]  (error না!)
+    a[-100:3]  # → [0 1 2]
+
+    # ❌ ভুল — single element slice vs index
+    a[2]       # → 2          (scalar, 0D)
+    a[2:3]     # → [2]        (1D array!)
+    # dtypes same কিন্তু ndim আলাদা
+    ```
+  </Tab>
+  <Tab value="2D Mistakes">
+    ```python
+    m = np.array([[1, 2, 3], [4, 5, 6]])
+
+    # ❌ ভুল — পুরনো comma-less syntax
+    m[0][1]    # → 2  (কাজ করে কিন্তু slow — দুটো index operation)
+
+    # ✅ সঠিক — comma separated
+    m[0, 1]    # → 2  (একটাই index operation, fast)
+
+    # ❌ ভুল — row এর বদলে element আসে
+    m[0, 0, 0]   # IndexError — 2D array এ 3D index!
+
+    # Boolean mask এ condition এর parentheses দাও
+    # ❌ এটা error দেবে
+    m[m > 1 & m < 5]    # & এর precedence > এর চেয়ে বেশি!
+
+    # ✅ সবসময় parentheses দাও
+    m[(m > 1) & (m < 5)]
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Practice Problems
+
+**P1.** এই array থেকে `[30, 40, 50]` বের করো:
+```python
+a = np.array([10, 20, 30, 40, 50, 60, 70])
+```
+
+**P2.** এই matrix থেকে `[[5, 6], [8, 9]]` বের করো:
+```python
+m = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+```
+
+**P3.** এই array থেকে শুধু negative numbers বাদ দিয়ে তাদের absolute value রাখো:
+```python
+arr = np.array([3, -1, 4, -1, 5, -9, 2, 6])
+# Expected: [3, 1, 4, 1, 5, 9, 2, 6]
+```
+
+**P4.** এই matrix এর সব 5 এর বেশি values কে 0 করো:
+```python
+m = np.array([[3, 7, 2], [8, 1, 5], [4, 9, 6]])
+```
+
+**P5.** `a = np.arange(20)` থেকে index 3, 7, 11, 15 এর elements বের করো।
+
+**P6.** একটা (4, 4) array থেকে diagonal elements বের করো।
+
+<details>
+<summary>Solutions দেখো</summary>
+
+```python
+# P1
+a[2:5]   # অথবা a[[2, 3, 4]]
+
+# P2
+m[1:, 1:]   # অথবা m[1:3, 1:3]
+
+# P3
+np.abs(arr)   # অথবা np.where(arr < 0, -arr, arr)
+
+# P4
+m[m > 5] = 0
+
+# P5
+a = np.arange(20)
+a[[3, 7, 11, 15]]
+# অথবা a[3::4]
+
+# P6
+m = np.arange(1, 17).reshape(4, 4)
+np.diag(m)   # → [1, 6, 11, 16]
+```
+</details>
