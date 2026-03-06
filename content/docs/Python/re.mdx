@@ -144,7 +144,7 @@ date_pat.findall("Events: 2025-10-07 and 2026-01-01")
     |       OR alternation:  cat|dog  → "cat" বা "dog"
     ( )     Capturing group
     (?: )   Non-capturing group
-    (?P<name> )  Named capturing group
+    `(?P<name> )`  Named capturing group
     (?= )   Positive lookahead
     (?! )   Negative lookahead
     (?<= )  Positive lookbehind
@@ -182,7 +182,7 @@ re.findall(r"(\w+)@(\w+)", "a@b.com c@d.org")
 
 ---
 
-## Named Groups — (?P<name>...) সবচেয়ে important
+## Named Groups — `(?P<name>...)` সবচেয়ে important
 
 ```python
 import re
