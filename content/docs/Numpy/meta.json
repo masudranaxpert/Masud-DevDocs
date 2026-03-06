@@ -1,0 +1,17 @@
+{
+  "title": "NumPy 2.x",
+  "description": "NumPy 2.x complete guide — arrays থেকে performance পর্যন্ত",
+  "root": true,
+  "pages": [
+    "index",
+    "basic",
+    "indexing",
+    "operations",
+    "broadcasting",
+    "shape",
+    "math",
+    "random",
+    "performance",
+    "practice"
+  ]
+}
